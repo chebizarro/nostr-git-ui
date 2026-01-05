@@ -1,0 +1,55 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "emitDeclarationOnly": true,
+    "allowImportingTsExtensions": true,
+    "types": ["svelte", "vite/client"],
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "$lib/*": ["src/lib/*"]
+    }
+  },
+  "include": [
+    "src/**/*.d.ts",
+    "src/lib/components/ui/**/*",
+    "src/lib/components/terminal/**/*",
+    "src/lib/components/events/**/*",
+    "src/lib/components/editor/PermalinkExtension.ts",
+    "src/lib/components/editor/PermalinkNodeView.svelte.ts",
+    "src/lib/components/editor/PermalinkTipTapEditor.svelte",
+    "src/lib/components/git/ForkRepoDialog.svelte",
+    "src/lib/components/git/AuthStatusIndicator.svelte",
+    "src/lib/components/git/GraspServersPanel.svelte",
+    "src/lib/components/git/FileView.svelte",
+    "src/lib/components/git/FileMetadataPanel.svelte",
+    "src/lib/stores/**/*",
+    "src/ConfigProvider.svelte",
+    "src/FunctionProvider.svelte"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "src/lib/examples/**",
+    "src/lib/types/xterm-fit.d.ts",
+    "**/*.stories.svelte",
+    "src/lib/hooks/useForkRepo.svelte.ts"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
+}
