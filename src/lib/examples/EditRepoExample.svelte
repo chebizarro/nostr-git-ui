@@ -2,8 +2,8 @@
   import  EditRepoPanel  from "../components/git/EditRepoPanel.svelte";
   import { useEditRepo } from "../hooks/useEditRepo.svelte";
   import type { Event } from "nostr-tools";
-  import type { RepoAnnouncementEvent, RepoStateEvent } from "nostr-git/events";
-  import { getTagValue } from "nostr-git/utils";
+  import type { RepoAnnouncementEvent, RepoStateEvent } from "@nostr-git/core/events";
+  import { getTagValue } from "@nostr-git/core/utils";
 
   // Example of how to integrate the Edit Repository feature
   let showEditPanel = $state(false);

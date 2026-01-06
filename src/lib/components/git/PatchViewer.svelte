@@ -9,7 +9,7 @@
     CheckCircle,
   } from "@lucide/svelte";
   import { Button } from "@nostr-git/ui";
-  import type { Patch } from "nostr-git/types";
+  import type { Patch } from "@nostr-git/core/types";
 
   // Use parse-diff File type from DiffViewer
   type AnyFileChange = import("parse-diff").File;

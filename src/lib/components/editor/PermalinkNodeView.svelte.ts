@@ -6,9 +6,9 @@ import {
   type RawCommands,
 } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import { createNeventFromPermalink } from "nostr-git/git";
+import { createNeventFromPermalink } from "@nostr-git/core/git";
 import type { EventTemplate, NostrEvent } from "nostr-tools";
-import type { EventIO } from "nostr-git/types";
+import type { EventIO } from "@nostr-git/core/types";
 import type { MarkdownSerializerState } from "@tiptap/pm/markdown";
 import { mount, unmount, type Component } from "svelte";
 import Spinner from "./Spinner.svelte";

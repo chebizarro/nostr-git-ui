@@ -2,7 +2,7 @@
   import { GitCommit, User, Calendar, ChevronDown, ChevronRight, Loader2 } from "@lucide/svelte";
   import { formatDistanceToNow } from "date-fns";
   import FileDiff from "./FileDiff.svelte";
-  import type { CommitDiff } from "nostr-git/types";
+  import type { CommitDiff } from "@nostr-git/core/types";
 
   interface Props {
     commitSha: string;

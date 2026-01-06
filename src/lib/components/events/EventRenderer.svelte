@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import type { NostrEvent } from "nostr-tools"
-  import type { Nip34Event, StatusEvent } from "nostr-git/events";
-  import { isStatusEvent } from "nostr-git/events";
+  import type { NostrEvent } from "nostr-tools";
+  import type { Nip34Event, StatusEvent } from "@nostr-git/core/events";
+  import { isStatusEvent } from "@nostr-git/core/events";
 
   import GitRepoComponent from "./GitRepoComponent.svelte";
   import GitRepoStateComponent from "./GitRepoStateComponent.svelte";
@@ -11,7 +11,7 @@
   import GitCommentComponent from "./GitCommentComponent.svelte";
   import GitStatusComponent from "./GitStatusComponent.svelte";
   import UnknownEventComponent from "./UnknownEventComponent.svelte";
-  
+
   // New unified feed components
   import GitStatusFeed from "../feed/GitStatusFeed.svelte";
   import GitCommentFeed from "../feed/GitCommentFeed.svelte";

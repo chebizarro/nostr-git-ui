@@ -3,7 +3,7 @@
   import { GitBranch, Star, BookOpen, Circle } from "@lucide/svelte";
   import { useRegistry } from "../../useRegistry";
   const { Avatar, Button, AvatarImage, AvatarFallback } = useRegistry();
-  import type { Profile } from "nostr-git/types";
+  import type { Profile } from "@nostr-git/core/types";
   import type { Repo } from "./Repo.svelte";
   // Accept event and optional owner (Profile)
   const {

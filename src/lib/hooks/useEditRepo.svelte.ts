@@ -1,11 +1,11 @@
 import type { Event } from "nostr-tools";
-import type { RepoAnnouncementEvent, RepoStateEvent } from "nostr-git/events";
+import type { RepoAnnouncementEvent, RepoStateEvent } from "@nostr-git/core/events";
 import {
   createRepoAnnouncementEvent,
   createRepoStateEvent,
   getTagValue,
-} from "nostr-git/events";
-import { detectVendorFromUrl } from "nostr-git/git";
+} from "@nostr-git/core/events";
+import { detectVendorFromUrl } from "@nostr-git/core/git";
 import { tokens as tokensStore } from "../stores/tokens.js";
 import { tryTokensForHost } from "../utils/tokenHelpers.js";
 

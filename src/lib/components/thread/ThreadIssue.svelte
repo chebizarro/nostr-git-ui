@@ -4,7 +4,7 @@
   import TimeAgo from "../../TimeAgo.svelte";
   import IssueCard from "../git/IssueCard.svelte";
   import Status from "../git/Status.svelte";
-  import { type Profile } from "nostr-git/types";
+  import { type Profile } from "@nostr-git/core/types";
 
   const {
     repoId,

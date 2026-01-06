@@ -12,17 +12,17 @@
   import { Repo } from "./Repo.svelte";
   import { useForkRepo } from "../../hooks/useForkRepo.svelte";
   import { tokens } from "$lib/stores/tokens";
-  import type { RepoAnnouncementEvent, RepoStateEvent } from "nostr-git/events";
+  import type { RepoAnnouncementEvent, RepoStateEvent } from "@nostr-git/core/events";
   import type { Token } from "$lib/stores/tokens";
   import type { ForkResult } from "../../hooks/useForkRepo.svelte";
   import { toast } from "../../stores/toast";
-  import { validateGraspServerUrl } from "nostr-git/events";
+  import { validateGraspServerUrl } from "@nostr-git/core/events";
   import { 
     getGitServiceApi,
     getProviderCapabilities,
     getProviderFromService, 
     buildProviderUrl 
-  } from "nostr-git/git";
+  } from "@nostr-git/core/git";
   import { tryTokensForHost, getTokensForHost } from "../../utils/tokenHelpers.js";
   // Load user's GRASP servers directly (so chips are reactive even if prop is static)
 

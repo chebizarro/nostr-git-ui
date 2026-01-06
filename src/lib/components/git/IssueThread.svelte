@@ -1,8 +1,8 @@
 <script lang="ts">
   import TimeAgo from "../../TimeAgo.svelte";
   import { MessageSquare } from "@lucide/svelte";
-  import { createCommentEvent, parseCommentEvent } from "nostr-git/events";
-  import type { CommentEvent, Profile } from "nostr-git/types";
+  import { createCommentEvent, parseCommentEvent } from "@nostr-git/core/events";
+  import type { CommentEvent, Profile } from "@nostr-git/core/types";
   import { useRegistry } from "../../useRegistry";
   import { slide } from "svelte/transition";
   import RichText from "../RichText.svelte";

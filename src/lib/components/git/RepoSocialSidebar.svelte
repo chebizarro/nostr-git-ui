@@ -6,7 +6,7 @@
   // Accept props for sidebar data
   const props = $props();
   const watchers: number = props.watchers ?? 0;
-  import type { Profile } from "nostr-git/types";
+  import type { Profile } from "@nostr-git/core/types";
   const contributors: Profile[] = props.contributors ?? [];
 </script>
 

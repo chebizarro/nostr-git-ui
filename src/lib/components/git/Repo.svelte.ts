@@ -12,9 +12,9 @@ import {
   StatusEvent,
   CommentEvent,
   LabelEvent,
-} from "nostr-git/events";
-import { type MergeAnalysisResult } from "nostr-git/git";
-import { canonicalRepoKey } from "nostr-git/utils";
+} from "@nostr-git/core/events";
+import { type MergeAnalysisResult } from "@nostr-git/core/git";
+import { canonicalRepoKey } from "@nostr-git/core/utils";
 import { type Readable } from "svelte/store";
 import { context } from "$lib/stores/context";
 import { toast } from "$lib/stores/toast";
@@ -29,7 +29,7 @@ import {
   RepoCore,
   type RepoContext,
   type EffectiveLabelsV2,
-} from "nostr-git/git";
+} from "@nostr-git/core/git";
 
 
 

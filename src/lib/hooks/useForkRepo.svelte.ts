@@ -3,9 +3,9 @@ import {
   createRepoStateEvent,
   RepoAnnouncementEvent,
   RepoStateEvent,
-} from "nostr-git/events";
+} from "@nostr-git/core/events";
 import { tokens as tokensStore, type Token } from "$lib/stores/tokens";
-import { getGitServiceApi } from "nostr-git/git";
+import { getGitServiceApi } from "@nostr-git/core/git";
 import { tryTokensForHost, getTokensForHost } from "../utils/tokenHelpers.js";
 
 // Types for fork configuration and progress
@@ -349,11 +349,11 @@ export function useForkRepo(options: UseForkRepoOptions = {}) {
       if (options.workerApi) {
         gitWorkerApi = options.workerApi;
         // Need worker for GRASP - create temporary one if not available
-        const { getGitWorker } = await import("nostr-git/worker");
+        const { getGitWorker } = await import("@nostr-git/core/worker");
         const workerInstance = getGitWorker();
         worker = workerInstance.worker;
       } else {
-        const { getGitWorker } = await import("nostr-git/worker");
+        const { getGitWorker } = await import("@nostr-git/core/worker");
         const workerInstance = getGitWorker();
         gitWorkerApi = workerInstance.api;
         worker = workerInstance.worker;

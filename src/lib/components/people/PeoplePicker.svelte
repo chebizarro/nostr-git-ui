@@ -2,7 +2,7 @@
 	import { onDestroy } from "svelte";
 	import UserAvatar from "../UserAvatar.svelte";
 	import { nip19 } from "nostr-tools";
-	import type { LabelEvent } from "nostr-git/events";
+	import type { LabelEvent } from "@nostr-git/core/events";
 
 	export interface PersonProfile {
 		name?: string;

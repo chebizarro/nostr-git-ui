@@ -2,7 +2,7 @@
   import { useRegistry } from "../../useRegistry";
   import { MessageSquare, Heart, Bookmark, Share2, MoreHorizontal, Link as LinkIcon } from "@lucide/svelte";
   import TimeAgo from "../../TimeAgo.svelte";
-  import type { Profile } from "nostr-git/events";
+  import type { Profile } from "@nostr-git/core/events";
   
   interface Props {
     author: Profile;

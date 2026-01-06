@@ -14,7 +14,7 @@
     CommentEvent,
     IssueEvent,
     StatusEvent 
-  } from "nostr-git/events";
+  } from "@nostr-git/core/events";
   import {
     getTagValue,
     GIT_STATUS_CLOSED,
@@ -22,7 +22,7 @@
     GIT_STATUS_APPLIED,
     parseIssueEvent,
     GIT_STATUS_DRAFT,
-  } from "nostr-git/events";
+  } from "@nostr-git/core/events";
   import IssueThread from "./IssueThread.svelte";
   import Status from "./Status.svelte";
   import { useRegistry } from "../../useRegistry";

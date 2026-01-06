@@ -6,9 +6,9 @@ import {
   getCommitInfo,
   getFileHistory,
   getCommitHistory,
-} from "nostr-git/git";
-import { getGitWorker } from "nostr-git/";
-import { RepoAnnouncementEvent } from "nostr-git/events";
+} from "@nostr-git/core/git";
+import { getGitWorker } from "@nostr-git/core/";
+import { RepoAnnouncementEvent } from "@nostr-git/core/events";
 
 export interface WorkerProgressEvent {
   repoId: string;

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { diffStore } from "./useDiffStore.js";
-  import type { Commit, CommitDiff as CommitDiffType } from "nostr-git/types";
+  import type { Commit, CommitDiff as CommitDiffType } from "@nostr-git/core/types";
   import CommitDiff from "./CommitDiff.svelte";
   import { Loader2, AlertCircle, RefreshCw } from "@lucide/svelte";
   import type { Repo } from "./Repo.svelte.js";

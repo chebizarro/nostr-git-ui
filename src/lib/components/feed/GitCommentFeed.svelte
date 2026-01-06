@@ -2,7 +2,7 @@
   import { type NostrEvent } from "nostr-tools";
   import FeedItem from "./FeedItem.svelte";
   import RichText from "../RichText.svelte";
-  import type { Profile } from "nostr-git/events";
+  import type { Profile } from "@nostr-git/core/events";
 
   interface Props {
     event: NostrEvent;

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Repo } from "./Repo.svelte"
-  import type { StatusEvent } from "nostr-git/events"
+  import type { StatusEvent } from "@nostr-git/core/events"
   import {
     GIT_STATUS_OPEN,
     GIT_STATUS_DRAFT,

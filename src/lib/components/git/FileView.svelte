@@ -3,8 +3,8 @@
   import { useRegistry } from "../../useRegistry.js";
   const { Button, Spinner } = useRegistry();
   import { toast } from "../../stores/toast.js";
-  import type { FileEntry, PermalinkEvent } from "nostr-git/types";
-  import { GIT_PERMALINK } from "nostr-git/types";
+  import type { FileEntry, PermalinkEvent } from "@nostr-git/core/types";
+  import { GIT_PERMALINK } from "@nostr-git/core/types";
   import type { Repo } from "./Repo.svelte";
   import CodeMirror from "svelte-codemirror-editor";
   import {

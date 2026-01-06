@@ -8,7 +8,7 @@
     CircleDot
   } from "@lucide/svelte";
   import FeedItem from "./FeedItem.svelte";
-  import type { Profile, StatusEvent } from "nostr-git/events";
+  import type { Profile, StatusEvent } from "@nostr-git/core/events";
 
   interface Props {
     event: StatusEvent;

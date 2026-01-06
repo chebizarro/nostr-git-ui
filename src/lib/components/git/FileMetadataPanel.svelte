@@ -3,7 +3,7 @@
   import { useRegistry } from "../../useRegistry";
   const { Button } = useRegistry();
   import { formatFileSize, type FileTypeInfo } from "../../utils/fileTypeDetection";
-  import type { FileEntry } from "nostr-git/types";
+  import type { FileEntry } from "@nostr-git/core/types";
 
   let {
     isOpen = $bindable(),

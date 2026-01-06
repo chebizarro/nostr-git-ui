@@ -5,8 +5,8 @@
   // Import xterm's CSS so the internal helper textarea is hidden and styling is applied
   import "@xterm/xterm/css/xterm.css";
   import { WorkerManager } from "../git/WorkerManager";
-  import { canonicalRepoKey } from "nostr-git/utils";
-  import { parseRepoAnnouncementEvent } from "nostr-git/events";
+  import { canonicalRepoKey } from "@nostr-git/core/utils";
+  import { parseRepoAnnouncementEvent } from "@nostr-git/core/events";
   import { tokens as tokensStore } from "../../stores/tokens.js";
   import { tryTokensForHost, getTokensForHost } from "../../utils/tokenHelpers.js";
   // Instantiate worker via URL like core git-worker client does
@@ -27,7 +27,7 @@
 
   interface TerminalProps {
     repoRef: { relay: string; naddr: string; npub: string; repoId: string };
-    repoEvent?: import("nostr-git/events").RepoAnnouncementEvent;
+    repoEvent?: import("@nostr-git/core/events").RepoAnnouncementEvent;
     fs?: FSLike;
     relays: string[];
     theme?: "retro" | "dark" | "light" | Record<string, string>;

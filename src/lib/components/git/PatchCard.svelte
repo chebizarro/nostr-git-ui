@@ -27,12 +27,12 @@
     type PullRequestEvent,
     type StatusEvent,
     type CommentEvent,
-  } from "nostr-git/events";
-  import { parseGitPatchFromEvent } from "nostr-git/git";
-  import { parsePullRequestEvent } from "nostr-git/events";
+  } from "@nostr-git/core/events";
+  import { parseGitPatchFromEvent } from "@nostr-git/core/git";
+  import { parsePullRequestEvent } from "@nostr-git/core/events";
   import IssueThread from "./IssueThread.svelte";
   import Status from "./Status.svelte";
-  import { getTagValue, getTags } from "nostr-git/events";
+  import { getTagValue, getTags } from "@nostr-git/core/events";
   import BaseItemCard from "../BaseItemCard.svelte";
   import TimeAgo from "../../TimeAgo.svelte";
   import NostrAvatar from "./NostrAvatar.svelte";

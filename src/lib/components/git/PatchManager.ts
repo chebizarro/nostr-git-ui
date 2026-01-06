@@ -1,5 +1,5 @@
-import { type PatchEvent } from "nostr-git/events";
-import { type MergeAnalysisResult } from "nostr-git/git";
+import { type PatchEvent } from "@nostr-git/core/events";
+import { type MergeAnalysisResult } from "@nostr-git/core/git";
 import { WorkerManager } from "./WorkerManager";
 import { MergeAnalysisCacheManager } from "./CacheManager";
 import { writable, type Readable } from "svelte/store";
@@ -278,7 +278,7 @@ export class PatchManager {
       );
       // Parse the patch for analysis
       // TODO: parseGitPatchFromEvent is missing from nostr-git/events - needs to be added or replaced
-      // const { parseGitPatchFromEvent } = await import("nostr-git/events");
+      // const { parseGitPatchFromEvent } = await import("@nostr-git/core/events");
       // const parsedPatch = parseGitPatchFromEvent(patch);
 
       // Temporary workaround: extract basic patch info from event tags

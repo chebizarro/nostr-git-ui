@@ -7,7 +7,7 @@
   const { Button, Spinner } = useRegistry();
   import { fly } from "svelte/transition";
   import { preventDefault } from "svelte/legacy";
-  import { GIT_REPO_BOOKMARK_DTAG, normalizeRepoKeySync, GIT_REPO_ANNOUNCEMENT } from "nostr-git/events";
+  import { GIT_REPO_BOOKMARK_DTAG, normalizeRepoKeySync, GIT_REPO_ANNOUNCEMENT } from "@nostr-git/core/events";
   import NostrAvatar from "./NostrAvatar.svelte";
 
 

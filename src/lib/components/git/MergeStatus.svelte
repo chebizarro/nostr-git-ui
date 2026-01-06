@@ -9,7 +9,7 @@
     FileText,
   } from "@lucide/svelte";
   import { useRegistry } from "../../useRegistry";
-  import type { MergeAnalysisResult } from "nostr-git/git";
+  import type { MergeAnalysisResult } from "@nostr-git/core/git";
 
   const { Card, CardHeader, CardTitle, CardContent, Badge } = useRegistry();
 

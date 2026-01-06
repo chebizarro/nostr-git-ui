@@ -1,6 +1,6 @@
 import { writable, derived } from "svelte/store";
 
-import type { CommitDiff } from "nostr-git/types";
+import type { CommitDiff } from "@nostr-git/core/types";
 
 export interface DiffStoreState {
   commitDiffs: Map<string, CommitDiff>;

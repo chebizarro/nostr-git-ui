@@ -8,7 +8,7 @@
     FileX,
     FileIcon,
   } from "@lucide/svelte";
-  import type { FileDiff } from "nostr-git/types";
+  import type { FileDiff } from "@nostr-git/core/types";
 
   interface Props {
     fileDiff: FileDiff;

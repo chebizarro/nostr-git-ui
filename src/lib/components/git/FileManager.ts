@@ -1,6 +1,6 @@
 import { WorkerManager } from "./WorkerManager";
 import { CacheManager } from "./CacheManager";
-import { type RepoAnnouncementEvent, parseRepoAnnouncementEvent } from "nostr-git/events";
+import { type RepoAnnouncementEvent, parseRepoAnnouncementEvent } from "@nostr-git/core/events";
 import { toast } from "$lib/stores/toast";
 
 /**

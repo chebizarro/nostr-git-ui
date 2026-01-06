@@ -14,7 +14,7 @@ export interface FSLike {
 
 export interface TerminalProps {
   repoRef: { relay: string; naddr: string; npub: string; repoId: string };
-  repoEvent?: import("nostr-git/events").RepoAnnouncementEvent;
+  repoEvent?: import("@nostr-git/core/events").RepoAnnouncementEvent;
   fs?: FSLike;
   relays: string[];
   theme?: "retro" | "dark" | "light" | Record<string, string>;

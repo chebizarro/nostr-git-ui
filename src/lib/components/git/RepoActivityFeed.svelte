@@ -5,7 +5,7 @@
   import { useRegistry } from "../../useRegistry";
   const { Avatar, Button, Card, AvatarImage, AvatarFallback } = useRegistry();
 
-  import type { Profile } from "nostr-git/types";
+  import type { Profile } from "@nostr-git/core/types";
   interface ActivityItem {
     id: string;
     type: "commit" | "discussion" | "star";
