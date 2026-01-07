@@ -5,19 +5,19 @@
 */
 
 import { describe, it, expect } from "vitest";
-import type {
-  RepoAnnouncementEvent,
-  RepoStateEvent,
-  PatchEvent,
-  IssueEvent,
-  NostrEvent,
-} from "@nostr-git/shared-types";
-import { parseRepoAnnouncementEvent } from "@nostr-git/shared-types";
-import { canonicalRepoKey } from "@nostr-git/core";
+import {
+  type RepoAnnouncementEvent,
+  type RepoStateEvent,
+  type PatchEvent,
+  type IssueEvent,
+  type NostrEvent,
+  parseRepoAnnouncementEvent,
+} from "@nostr-git/core/events";
+import { canonicalRepoKey } from "@nostr-git/core/utils";
 import {
   RepoCore,
   type RepoContext,
-} from "@nostr-git/core";
+} from "@nostr-git/core/git";
 
 // Build a minimal RepoContext for tests
 const mkCtx = (over: Partial<RepoContext> = {}): RepoContext => ({

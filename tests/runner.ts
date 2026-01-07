@@ -1,6 +1,5 @@
 // Test runner utilities for patches detail page tests
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
-import type { Patch, Commit, MergeAnalysisResult } from "@nostr-git/core";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   MockPatchNavigation,
   MockMergeAnalysis,
@@ -8,7 +7,6 @@ import {
   MockCommentSystem,
   MockStatusEmitter,
   createTestPatchSet,
-  createTestStatusEvents,
   createTestComments,
 } from "./stubs/patches";
 

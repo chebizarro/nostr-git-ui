@@ -1,5 +1,6 @@
 // Test stubs and utilities for patches functionality
-export type { Patch, Commit } from "@nostr-git/core";
+export type { Patch } from "@nostr-git/core/events";
+export type { Commit } from "@nostr-git/core/types";
 
 // Mock patch navigation state
 export class MockPatchNavigation {

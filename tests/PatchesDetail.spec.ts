@@ -9,14 +9,13 @@ import type {
   RepoAnnouncementEvent,
   RepoStateEvent,
   PatchEvent,
-  IssueEvent,
   StatusEvent,
   CommentEvent,
-  NostrEvent,
-} from "@nostr-git/shared-types";
-import { parseRepoAnnouncementEvent, parsePatchEvent, createStatusEvent } from "@nostr-git/shared-types";
-import { canonicalRepoKey } from "@nostr-git/core";
-import type { Commit, Patch, MergeAnalysisResult } from "@nostr-git/core";
+} from "@nostr-git/core/events";
+import { createStatusEvent } from "@nostr-git/core/events";
+import type { Patch } from "@nostr-git/core/events";
+import type { Commit } from "@nostr-git/core/types";
+import { MergeAnalysisResult } from "@nostr-git/core/git";
 
 // Mock external dependencies
 vi.mock("@welshman/app", () => ({
