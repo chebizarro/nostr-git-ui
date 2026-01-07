@@ -50,7 +50,6 @@
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.10.1",
     "autoprefixer": "^10.4.21",
-    "bits-ui": "^1.5.3",
     "clsx": "^2.1.1",
     "eslint": "^9.15.0",
     "eslint-config-prettier": "^10.1.8",
@@ -73,6 +72,7 @@
     "vitest": "^2.1.4"
   },
   "dependencies": {
+    "bits-ui": "^1.5.3",
     "@codemirror/lang-cpp": "^6.0.2",
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-go": "^6.0.1",
@@ -100,7 +100,7 @@
     "date-fns": "^4.1.0",
     "debug": "^4.3.7",
     "markdown-it": "^14.1.0",
-    "@nostr-git/core": "git+https://github.com/chebizarro/nostr-git.git#064272582dad710b527864e1f8e499e01d3aecdf",
+    "@nostr-git/core": "git+https://github.com/chebizarro/nostr-git.git#ed881a68426eb7404a0aefa27d9dd40d5ebb4bac",
     "parse-diff": "^0.11.1",
     "parse-git-diff": "^0.0.19",
     "parse-patch": "^0.1.4",
