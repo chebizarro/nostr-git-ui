@@ -7,7 +7,7 @@ import {
   getFileHistory,
   getCommitHistory,
 } from "@nostr-git/core/git";
-import { getGitWorker } from "@nostr-git/core/";
+import { getGitWorker } from "@nostr-git/core";
 import { RepoAnnouncementEvent } from "@nostr-git/core/events";
 
 export interface WorkerProgressEvent {
