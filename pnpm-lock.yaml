@@ -60,8 +60,8 @@ importers:
         specifier: ^0.562.0
         version: 0.562.0(svelte@5.46.1)
       '@nostr-git/core':
-        specifier: git+https://github.com/chebizarro/nostr-git.git#86cc64c7a4dee9512e910027677fa749a970d78f
-        version: https://codeload.github.com/chebizarro/nostr-git/tar.gz/86cc64c7a4dee9512e910027677fa749a970d78f(typescript@5.9.3)
+        specifier: git+https://github.com/chebizarro/nostr-git.git#377fb2c3155ec0bd74f252366096572d54069ba8
+        version: https://codeload.github.com/chebizarro/nostr-git/tar.gz/377fb2c3155ec0bd74f252366096572d54069ba8(typescript@5.9.3)
       '@tiptap/core':
         specifier: ^2.26.0
         version: 2.27.1(@tiptap/pm@2.27.1)
@@ -583,8 +583,8 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@nostr-git/core@https://codeload.github.com/chebizarro/nostr-git/tar.gz/86cc64c7a4dee9512e910027677fa749a970d78f':
-    resolution: {tarball: https://codeload.github.com/chebizarro/nostr-git/tar.gz/86cc64c7a4dee9512e910027677fa749a970d78f}
+  '@nostr-git/core@https://codeload.github.com/chebizarro/nostr-git/tar.gz/377fb2c3155ec0bd74f252366096572d54069ba8':
+    resolution: {tarball: https://codeload.github.com/chebizarro/nostr-git/tar.gz/377fb2c3155ec0bd74f252366096572d54069ba8}
     version: 1.0.0-alpha.1
 
   '@octokit/openapi-types@25.1.0':
@@ -2810,7 +2810,7 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@nostr-git/core@https://codeload.github.com/chebizarro/nostr-git/tar.gz/86cc64c7a4dee9512e910027677fa749a970d78f(typescript@5.9.3)':
+  '@nostr-git/core@https://codeload.github.com/chebizarro/nostr-git/tar.gz/377fb2c3155ec0bd74f252366096572d54069ba8(typescript@5.9.3)':
     dependencies:
       '@isomorphic-git/lightning-fs': 4.6.2
       buffer: 6.0.3
