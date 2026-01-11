@@ -10,6 +10,17 @@ import {
   FatalError,
 } from "@nostr-git/core/errors";
 
+// Worker URL/factory must be injected by the consuming app (not imported here)
+// because ?url imports only work at the app's bundler level, not in pre-built packages
+export type GitWorkerFactory = () => Worker;
+
+export interface WorkerManagerConfig {
+  /** Factory function to create the worker (preferred) */
+  workerFactory?: GitWorkerFactory;
+  /** Worker URL as fallback if factory not provided */
+  workerUrl?: string | URL;
+}
+
 export interface WorkerProgressEvent {
   repoId: string;
   phase: string;
@@ -48,14 +59,17 @@ export class WorkerManager {
   private isInitialized = false;
   private progressCallback?: WorkerProgressCallback;
   private authConfig: AuthConfig = { tokens: [] };
+  private workerConfig?: WorkerManagerConfig;
   // Throttle repeated initialize() calls and avoid duplicate work
   private initInFlight: Promise<void> | null = null;
   private lastInitAt = 0;
   private static readonly MIN_INIT_INTERVAL_MS = 1500;
   // Deduplicate auth-config updates
   private lastAuthConfigJson = "";
-  constructor(progressCallback?: WorkerProgressCallback) {
+  
+  constructor(progressCallback?: WorkerProgressCallback, workerConfig?: WorkerManagerConfig) {
     this.progressCallback = progressCallback;
+    this.workerConfig = workerConfig;
     // Clean architecture - worker handles EventIO internally
   }
 
@@ -63,22 +77,45 @@ export class WorkerManager {
    * Initialize the git worker and API
    */
   async initialize() {
-    if (this.initInFlight) {
-      return this.initInFlight;
+    // If already initialized, return immediately
+    if (this.isInitialized && this.api) {
+      return;
     }
-    if (this.isInitialized) {
+    // If initialization is in progress, wait for it
+    if (this.initInFlight) {
+      await this.initInFlight;
       return;
     }
     this.initInFlight = (async () => {
-      const { worker, api } = getGitWorker(this.handleWorkerProgress);
+      // Use injected worker config from consuming app (workerFactory or workerUrl)
+      // Falls back to default getGitWorker behavior if no config provided
+      console.log("[WorkerManager] Initializing with config:", {
+        hasWorkerFactory: !!this.workerConfig?.workerFactory,
+        workerUrl: this.workerConfig?.workerUrl,
+      });
+      const { worker, api } = getGitWorker({
+        workerFactory: this.workerConfig?.workerFactory,
+        workerUrl: this.workerConfig?.workerUrl,
+        onProgress: this.handleWorkerProgress,
+        onError: (ev: ErrorEvent | MessageEvent) => {
+          console.error("[WorkerManager] Worker load error:", ev);
+        },
+      });
       this.worker = worker;
       this.api = api as any;
-      this.isInitialized = true;
       
       try {
-        if (this.worker) {
-          // Comlink proxies do not enumerate properties reliably; avoid Object.keys checks
-        }
+        // Ping the worker to verify it's alive (fast failure detection)
+        const pingTimeout = 5000; // 5 seconds
+        const pingPromise = this.api.ping();
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("Worker ping timed out - worker may not have loaded correctly")), pingTimeout);
+        });
+        
+        const pingResult = await Promise.race([pingPromise, timeoutPromise]);
+        console.log("[WorkerManager] Worker ping successful:", pingResult);
+        
+        this.isInitialized = true;
 
         // Set authentication configuration in the worker (dedup)
         const cfgJson = JSON.stringify(this.authConfig || {});
@@ -90,7 +127,8 @@ export class WorkerManager {
         }
       } catch (error) {
         console.error("Failed to initialize git worker:", error);
-        throw new Error(
+        this.isInitialized = false;
+        throw new FatalError(
           `Worker initialization failed: ${error instanceof Error ? error.message : String(error)}`
         );
       }
@@ -139,9 +177,7 @@ export class WorkerManager {
     const ctx = ctxFrom(params);
 
     if (!this.isInitialized || !this.api) {
-      const err = createUnknownError();
-      err.message = `WorkerManager not initialized. Call initialize() first.${ctx}`;
-      throw err;
+      throw createUnknownError(`WorkerManager not initialized. Call initialize() first.${ctx}`);
     }
 
     try {
@@ -162,9 +198,7 @@ export class WorkerManager {
       try {
         JSON.stringify(safeParams, null, 2);
       } catch (serError) {
-        const err = createUnknownError();
-        err.message = `Cannot serialize params for '${operation}'.${ctx}`;
-        throw withCause(serError, err);
+        throw createUnknownError(`Cannot serialize params for '${operation}'.${ctx}`, undefined, serError instanceof Error ? serError : undefined);
       }
 
       // Add timeout to detect hanging worker calls
@@ -177,9 +211,7 @@ export class WorkerManager {
       if (timeoutMs > 0) {
         const timeoutPromise = new Promise((_, reject) => {
           const t = setTimeout(() => {
-            const terr = createTimeoutError();
-            terr.message = `Worker operation '${operation}' timed out after ${timeoutMs}ms.${ctx}`;
-            reject(terr);
+            reject(createTimeoutError({ operation, timeoutMs, context: ctx }));
           }, timeoutMs);
           // Avoid leaking timers in unusual promise scheduling cases
           void t;
@@ -225,38 +257,28 @@ export class WorkerManager {
       if (
         /unauthorized|forbidden|permission denied|auth|token|401|403/.test(lowered)
       ) {
-        const aerr = createAuthRequiredError();
-        aerr.message = `Authentication required for '${operation}'.${ctx}`;
-        throw withCause(error, aerr);
+        throw createAuthRequiredError({ operation, context: ctx }, error instanceof Error ? error : undefined);
       }
 
       // Timeout-ish errors
       if (/timed out|timeout/.test(lowered)) {
-        const terr = createTimeoutError();
-        terr.message = `Worker operation '${operation}' timed out.${ctx}`;
-        throw withCause(error, terr);
+        throw createTimeoutError({ operation, context: ctx }, error instanceof Error ? error : undefined);
       }
 
       // Network-ish errors
       if (
         /failed to fetch|networkerror|fetch failed|econnreset|enotfound|eai_again/.test(lowered)
       ) {
-        const nerr = createNetworkError();
-        nerr.message = `Network error during '${operation}'.${ctx}`;
-        throw withCause(error, nerr);
+        throw createNetworkError({ operation, context: ctx }, error instanceof Error ? error : undefined);
       }
 
       // FS-ish errors (isomorphic-git and browser fs backends often emit these)
       if (/enoent|eacces|eperm|enospc|notfounderror/.test(lowered)) {
-        const ferr = createFsError();
-        ferr.message = `Filesystem error during '${operation}'.${ctx}`;
-        throw withCause(error, ferr);
+        throw createFsError(`Filesystem error during '${operation}'.${ctx}`, { operation }, error instanceof Error ? error : undefined);
       }
 
       // Unknown
-      const uerr = createUnknownError();
-      uerr.message = `Worker operation '${operation}' failed.${ctx}`;
-      throw withCause(error, uerr);
+      throw createUnknownError(`Worker operation '${operation}' failed.${ctx}`, { operation }, error instanceof Error ? error : undefined);
     }
   }
 
@@ -270,6 +292,7 @@ export class WorkerManager {
     forceUpdate?: boolean;
     timeoutMs?: number; // Optional custom timeout for background operations
   }): Promise<any> {
+    await this.initialize();
     const { timeoutMs, ...executeParams } = params;
     return this.execute("smartInitializeRepo", executeParams, { timeoutMs });
   }
@@ -283,6 +306,7 @@ export class WorkerManager {
     cloneUrls: string[];
     branch?: string;
   }): Promise<any> {
+    await this.initialize();
     return this.execute("syncWithRemote", params);
   }
 
@@ -292,6 +316,7 @@ export class WorkerManager {
   async isRepoCloned(params: {
     repoId: string;
   }): Promise<boolean> {
+    await this.initialize();
     return this.execute("isRepoCloned", params);
   }
 
@@ -305,6 +330,7 @@ export class WorkerManager {
     token?: string;
     provider?: string;
   }): Promise<any> {
+    await this.initialize();
     return this.execute("pushToRemote", params);
   }
 
@@ -325,6 +351,7 @@ export class WorkerManager {
       blockIfShallow?: boolean;
     };
   }): Promise<any> {
+    await this.initialize();
     return this.execute("safePushToRemote", params);
   }
 
@@ -332,13 +359,15 @@ export class WorkerManager {
    * Get repository data level (refs, shallow, full)
    */
   async getRepoDataLevel(repoId: string): Promise<string> {
-    return this.execute("getRepoDataLevel", repoId);
+    await this.initialize();
+    return this.execute("getRepoDataLevel", { repoId });
   }
 
   /**
    * Ensure full clone of repository
    */
   async ensureFullClone(params: { repoId: string; branch: string; depth?: number }): Promise<any> {
+    await this.initialize();
     return this.execute("ensureFullClone", params);
   }
 
@@ -351,6 +380,7 @@ export class WorkerManager {
     depth: number;
     offset?: number;
   }): Promise<any> {
+    await this.initialize();
     return this.execute("getCommitHistory", params);
   }
 
@@ -362,6 +392,7 @@ export class WorkerManager {
     commitId: string;
     branch?: string;
   }): Promise<any> {
+    await this.initialize();
     return this.execute("getCommitDetails", params);
   }
 
@@ -369,6 +400,7 @@ export class WorkerManager {
    * Get commit count
    */
   async getCommitCount(params: { repoId: string; branch: string }): Promise<any> {
+    await this.initialize();
     return this.execute("getCommitCount", params);
   }
 
@@ -376,6 +408,7 @@ export class WorkerManager {
    * Get working tree status using worker's getStatus()
    */
   async getStatus(params: { repoId: string; branch?: string }): Promise<any> {
+    await this.initialize();
     return this.execute("getStatus", params);
   }
 
@@ -383,6 +416,7 @@ export class WorkerManager {
    * Delete repository
    */
   async deleteRepo(params: { repoId: string }): Promise<any> {
+    await this.initialize();
     return this.execute("deleteRepo", params);
   }
 
@@ -394,6 +428,7 @@ export class WorkerManager {
     patchData: any;
     targetBranch: string;
   }): Promise<any> {
+    await this.initialize();
     return this.execute("analyzePatchMerge", params);
   }
 

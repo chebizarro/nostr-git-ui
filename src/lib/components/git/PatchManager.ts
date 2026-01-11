@@ -1,5 +1,5 @@
 import type { PatchEvent } from "@nostr-git/core/events";
-import { type MergeAnalysisResult } from "@nostr-git/core/git";
+import { type MergeAnalysisResult, parseGitPatchFromEvent } from "@nostr-git/core/git";
 import { WorkerManager } from "./WorkerManager";
 import { MergeAnalysisCacheManager } from "./CacheManager";
 import { writable, type Readable } from "svelte/store";
@@ -276,21 +276,11 @@ export class PatchManager {
         "debug",
         `🔍 Analyzing patch ${patch.id} (branch=${targetBranch}, repo=${canonicalKey})`
       );
-      // Parse the patch for analysis
-      // TODO: parseGitPatchFromEvent is missing from nostr-git/events - needs to be added or replaced
-      // const { parseGitPatchFromEvent } = await import("@nostr-git/core/events");
-      // const parsedPatch = parseGitPatchFromEvent(patch);
-
-      // Temporary workaround: extract basic patch info from event tags
-      const parsedPatch = {
-        id: patch.id,
-        commits: [] as any[], // TODO: Extract from patch content when parseGitPatchFromEvent is available
-        baseBranch: targetBranch, // Use the target branch as base
-      };
+      
+      // Parse the patch to extract commits and content
+      const parsedPatch = parseGitPatchFromEvent(patch);
 
       // Use WorkerManager to perform the analysis
-      // NOTE: Do NOT pass rawContent through Comlink - it's too large and causes serialization issues
-      // Instead, pass just the metadata and let the worker read the patch content if needed
       const result = await this.workerManager.analyzePatchMerge({
         repoId: canonicalKey,
         patchData: {
@@ -300,9 +290,8 @@ export class PatchManager {
             message: c.message,
             author: { name: c.author.name, email: c.author.email },
           })),
-          baseBranch: parsedPatch.baseBranch,
-          // rawContent removed - worker doesn't actually need it for merge analysis
-          rawContent: "", // Empty string to satisfy type, worker uses git operations instead
+          baseBranch: parsedPatch.baseBranch || targetBranch,
+          rawContent: patch.content, // Pass the raw patch content for merge analysis
         },
         targetBranch,
       });

@@ -172,6 +172,7 @@ export class Repo {
     commentEvents,
     labelEvents,
     viewerPubkey,
+    workerConfig,
   }: {
     repoEvent: Readable<RepoAnnouncementEvent>;
     repoStateEvent: Readable<RepoStateEvent>;
@@ -182,16 +183,20 @@ export class Repo {
     commentEvents?: Readable<CommentEvent[]>;
     labelEvents?: Readable<LabelEvent[]>;
     viewerPubkey?: Readable<string | null>;
+    workerConfig?: { workerFactory?: () => Worker; workerUrl?: string | URL };
   }) {
-    // Initialize WorkerManager first
-    this.workerManager = new WorkerManager((progressEvent: WorkerProgressEvent) => {
-      console.log(`Clone progress for ${progressEvent.repoId}: ${progressEvent.phase}`);
-      this.cloneProgress = {
-        isCloning: true,
-        phase: progressEvent.phase,
-        progress: progressEvent.progress,
-      };
-    });
+    // Initialize WorkerManager first with optional worker config from consuming app
+    this.workerManager = new WorkerManager(
+      (progressEvent: WorkerProgressEvent) => {
+        console.log(`Clone progress for ${progressEvent.repoId}: ${progressEvent.phase}`);
+        this.cloneProgress = {
+          isCloning: true,
+          phase: progressEvent.phase,
+          progress: progressEvent.progress,
+        };
+      },
+      workerConfig
+    );
 
     // Keep worker auth config synced with token store updates
     tokens.subscribe(async (t) => {
@@ -755,8 +760,9 @@ export class Repo {
       const repoId = this.key;
       const cloneUrls = [...(this.#repo?.clone || [])];
 
-      if (!repoId || !cloneUrls.length) {
-        console.warn("Repository ID or clone URLs missing, skipping initialization");
+      // Validate repoId is not empty string
+      if (!repoId || repoId.trim() === "" || !cloneUrls.length) {
+        console.debug("[Repo] #loadCommitsFromRepo skipped: missing repoId or clone URLs", { repoId, cloneUrls: cloneUrls.length });
         return;
       }
 
@@ -795,7 +801,15 @@ export class Repo {
   }
 
   async #loadCommits() {
-    if (!this.repoEvent || !this.mainBranch) return;
+    // Validate repoId is not empty string
+    if (!this.repoEvent || !this.mainBranch || !this.key || this.key.trim() === "") {
+      console.debug("[Repo] #loadCommits skipped: missing repoEvent, mainBranch, or key", { 
+        hasRepoEvent: !!this.repoEvent, 
+        mainBranch: this.mainBranch, 
+        key: this.key 
+      });
+      return;
+    }
 
     // Delegate to CommitManager
     await this.commitManager.loadCommits(
@@ -1143,9 +1157,14 @@ export class Repo {
         effectiveMainBranch = this.mainBranch || "";
       }
 
-      if (!this.repoEvent || !effectiveMainBranch || !effectiveRepoId) {
-        const error = "Repository event, main branch, and repository ID are required";
-        return { success: false, error };
+      // Validate repoId is not empty string
+      if (!this.repoEvent || !effectiveMainBranch || !effectiveRepoId || effectiveRepoId.trim() === "") {
+        console.debug("[Repo] loadPage skipped: missing repoEvent, mainBranch, or repoId", {
+          hasRepoEvent: !!this.repoEvent,
+          effectiveMainBranch,
+          effectiveRepoId,
+        });
+        return { success: false, error: "Repository event, main branch, and repository ID are required" };
       }
 
       // Use the CommitManager's loadPage method which sets the page and calls loadCommits

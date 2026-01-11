@@ -220,7 +220,19 @@ export class CommitManager {
     mainBranch?: string
   ): Promise<CommitLoadResult> {
     const effectiveRepoId = repoId || this.workerRepoId;
-    if (!effectiveRepoId || !mainBranch) {
+    
+    // Debug logging to trace the issue
+    console.log("[CommitManager] loadCommits called with:", { 
+      repoId, 
+      workerRepoId: this.workerRepoId, 
+      effectiveRepoId, 
+      branch, 
+      mainBranch 
+    });
+    
+    // Validate repoId is not empty string
+    if (!effectiveRepoId || effectiveRepoId.trim() === "" || !mainBranch) {
+      console.debug("[CommitManager] loadCommits skipped: missing repoId or mainBranch", { effectiveRepoId, mainBranch });
       return { success: false, error: "Repository ID and main branch are required" };
     }
 
@@ -276,8 +288,14 @@ export class CommitManager {
       // Calculate the depth needed for current page
       const requiredDepth = this.commitsPerPage * this.currentPage;
 
+      // Double-check repoId before worker call (defensive)
+      if (!effectiveRepoId || effectiveRepoId.trim() === "") {
+        console.error("[CommitManager] effectiveRepoId is empty before getRepoDataLevel call");
+        return { success: false, error: "Repository ID is empty" };
+      }
+
       // Check current data level
-      const dataLevel = await this.workerManager.getRepoDataLevel(effectiveRepoId as string);
+      const dataLevel = await this.workerManager.getRepoDataLevel(effectiveRepoId);
 
       // For commit history, we need full clone to avoid NotFoundError
       if (dataLevel !== "full") {

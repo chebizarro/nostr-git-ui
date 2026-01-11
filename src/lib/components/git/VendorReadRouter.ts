@@ -420,9 +420,7 @@ export class VendorReadRouter {
       };
     }
 
-    const err = createUnknownError();
-    err.message = `Unexpected vendor directory response.${ctx}`;
-    throw err;
+    throw createUnknownError(`Unexpected vendor directory response.${ctx}`);
   }
 
   private async vendorGetFileContentGitHubLike(params: {
