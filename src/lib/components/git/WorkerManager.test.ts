@@ -1,6 +1,34 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { WorkerManager } from './WorkerManager';
 
+vi.mock('@nostr-git/core/errors', () => {
+  class FatalError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'FatalError';
+    }
+  }
+
+  const mk = (name: string) => {
+    const e = new Error('');
+    (e as any).name = name;
+    return e;
+  };
+
+  return {
+    FatalError,
+    createAuthRequiredError: vi.fn(() => mk('UserActionableError')),
+    createNetworkError: vi.fn(() => mk('RetriableError')),
+    createTimeoutError: vi.fn(() => mk('RetriableError')),
+    createFsError: vi.fn(() => mk('FatalError')),
+    createUnknownError: vi.fn(() => mk('RetriableError')),
+    wrapError: vi.fn((cause: any, err: any) => {
+      (err as any).cause = cause;
+      return err;
+    }),
+  };
+});
+
 // Mock getGitWorker
 vi.mock('@nostr-git/core', () => ({
   getGitWorker: vi.fn(() => ({
@@ -14,6 +42,16 @@ vi.mock('@nostr-git/core', () => ({
       setAuthConfig: vi.fn().mockResolvedValue(undefined),
       ping: vi.fn().mockResolvedValue({ success: true }),
       smartInitializeRepo: vi.fn().mockResolvedValue({ success: true }),
+      syncWithRemote: vi.fn().mockResolvedValue({ success: true }),
+      resetRepoToRemote: vi.fn().mockResolvedValue({ success: true, remoteCommit: 'abc123' }),
+      applyPatchAndPush: vi.fn().mockResolvedValue({ success: true }),
+      listBranchesFromEvent: vi.fn().mockResolvedValue(['main', 'develop']),
+      listRepoFilesFromEvent: vi.fn().mockResolvedValue([]),
+      getRepoFileContentFromEvent: vi.fn().mockResolvedValue(''),
+      fileExistsAtCommit: vi.fn().mockResolvedValue(true),
+      getCommitInfo: vi.fn().mockResolvedValue({}),
+      getFileHistory: vi.fn().mockResolvedValue([]),
+      getCommitHistoryFromEvent: vi.fn().mockResolvedValue([]),
       getStatus: vi.fn().mockResolvedValue({
         success: true,
         files: [],

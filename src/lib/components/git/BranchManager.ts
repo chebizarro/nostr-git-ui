@@ -4,6 +4,7 @@ import { context } from "$lib/stores/context";
 import { toast } from "$lib/stores/toast";
 import type { RepoAnnouncementEvent, RepoStateEvent } from "@nostr-git/core/events";
 import { GIT_REPO_STATE, parseRepoAnnouncementEvent } from "@nostr-git/core/events";
+import type { VendorReadRouter } from "./VendorReadRouter";
 
 // Branch interface definition (since it's not exported from shared-types)
 export interface Branch {
@@ -26,6 +27,8 @@ export interface BranchManagerConfig {
   autoRefresh?: boolean;
   /** Refresh interval in milliseconds */
   refreshInterval?: number;
+  /** Optional vendor-first read router (API-first, git fallback) */
+  vendorReadRouter?: VendorReadRouter;
 }
 
 /**
@@ -76,6 +79,29 @@ export class BranchManager {
   private nip34References: Map<string, NIP34Reference> = new Map();
   private refs: Array<{name: string; type: "heads" | "tags"; fullRef: string; commitId: string}> = [];
   private loadingRefs: boolean = false;
+  private vendorReadRouter?: VendorReadRouter;
+  private repoEventSnapshot?: RepoAnnouncementEvent;
+
+  private getCloneUrlsFromRepoEvent(repoEvent: RepoAnnouncementEvent): string[] {
+    try {
+      const parsed: any = parseRepoAnnouncementEvent(repoEvent as any) as any;
+      const clone = parsed?.clone;
+      if (Array.isArray(clone)) {
+        return clone.map((u: any) => String(u || "").trim()).filter(Boolean);
+      }
+    } catch {}
+
+    try {
+      const tags: any[] = (repoEvent as any)?.tags || [];
+      const urls = tags
+        .filter((t: any) => Array.isArray(t) && t[0] === "clone" && t[1])
+        .map((t: any) => String(t[1] || "").trim())
+        .filter(Boolean);
+      if (urls.length > 0) return urls;
+    } catch {}
+
+    return [];
+  }
 
   // Loading state
   private loadingIds: {
@@ -107,8 +133,11 @@ export class BranchManager {
       enableCaching: config.enableCaching ?? true,
       cacheTTL: config.cacheTTL ?? 5 * 60 * 1000, // 5 minutes
       autoRefresh: config.autoRefresh ?? false,
-      refreshInterval: config.refreshInterval ?? 30 * 1000, // 30 seconds
+      refreshInterval: config.refreshInterval ?? 30 * 1000, // 30 seconds,
+      vendorReadRouter: config.vendorReadRouter ?? undefined,
     };
+
+    this.vendorReadRouter = config.vendorReadRouter;
   }
 
   /**
@@ -281,6 +310,7 @@ export class BranchManager {
     stateEvent: RepoStateEvent,
     repoEvent: RepoAnnouncementEvent
   ): Promise<void> {
+    this.repoEventSnapshot = repoEvent;
     this.nip34References.clear();
 
     if (!stateEvent.tags) return;
@@ -437,11 +467,44 @@ export class BranchManager {
       this.lastLoadRefsAt = now;
       
       // Use the Repo's getAllRefsWithFallback which has proper fallback logic
-      const loadedRefs = await getAllRefsWithFallback();
-      this.refs = loadedRefs;
+      let loadedRefs = await getAllRefsWithFallback();
+
+      // If Repo fallback yields no refs, attempt vendor-first refs as best-effort fallback.
+      // This preserves NIP-34 trust logic: vendor refs are only used when state/git derived refs are missing.
+      if (
+        (!loadedRefs || loadedRefs.length === 0) &&
+        this.vendorReadRouter &&
+        this.repoEventSnapshot
+      ) {
+        try {
+          const cloneUrls = this.getCloneUrlsFromRepoEvent(this.repoEventSnapshot);
+          const vendorRes = await this.vendorReadRouter.listRefs({
+            workerManager: this.workerManager,
+            repoEvent: this.repoEventSnapshot,
+            cloneUrls,
+          });
+
+          const vendorRefs = (vendorRes.refs || []).map((r) => ({
+            name: r.name,
+            type: r.type,
+            fullRef: r.fullRef,
+            commitId: r.commitId,
+          }));
+
+          if (vendorRefs.length > 0) {
+            loadedRefs = vendorRefs.sort((a, b) =>
+              a.type === b.type ? a.name.localeCompare(b.name) : a.type === "heads" ? -1 : 1
+            );
+          }
+        } catch (e) {
+          console.warn("VendorReadRouter.listRefs failed; continuing with empty refs:", e);
+        }
+      }
+
+      this.refs = loadedRefs || [];
       
       // Convert refs to ProcessedBranch format for backward compatibility
-      this.branches = loadedRefs
+      this.branches = this.refs
         .filter(ref => ref.type === "heads")
         .map((ref): ProcessedBranch => {
           const nip34Ref = this.nip34References.get(ref.name);
@@ -473,6 +536,7 @@ export class BranchManager {
    * @deprecated Use loadAllRefs instead
    */
   async loadBranchesFromRepo(repoEvent: RepoAnnouncementEvent): Promise<void> {
+    this.repoEventSnapshot = repoEvent;
     try {
       // Clear any previous loading message
       if (this.loadingIds.branches) {

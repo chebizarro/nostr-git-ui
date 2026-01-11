@@ -3,6 +3,8 @@ import { CacheManager } from "./CacheManager";
 import type { RepoAnnouncementEvent } from "@nostr-git/core/events";
 import { parseRepoAnnouncementEvent } from "@nostr-git/core/events";
 import { toast } from "$lib/stores/toast";
+import type { VendorReadRouter } from "./VendorReadRouter";
+import { createTimeoutError } from "@nostr-git/core/errors";
 
 /**
  * Configuration options for FileManager
@@ -18,6 +20,8 @@ export interface FileManagerConfig {
   maxCacheFileSize?: number;
   /** Enable automatic cache cleanup */
   autoCleanup?: boolean;
+  /** Optional vendor-first read router (API-first, git fallback) */
+  vendorReadRouter?: VendorReadRouter;
 }
 
 /**
@@ -102,6 +106,7 @@ export class FileManager {
   private workerManager: WorkerManager;
   private cacheManager?: CacheManager;
   private config: Required<FileManagerConfig>;
+  private vendorReadRouter?: VendorReadRouter;
 
   // Cache keys for different types of file operations
   private static readonly CACHE_KEYS = {
@@ -126,7 +131,10 @@ export class FileManager {
       listingCacheTTL: config.listingCacheTTL ?? 5 * 60 * 1000, // 5 minutes
       maxCacheFileSize: config.maxCacheFileSize ?? 1024 * 1024, // 1MB
       autoCleanup: config.autoCleanup ?? true,
+      vendorReadRouter: config.vendorReadRouter ?? undefined,
     };
+
+    this.vendorReadRouter = config.vendorReadRouter;
   }
 
   // In-flight and recent-call guards to avoid thrashing
@@ -173,7 +181,9 @@ export class FileManager {
           }
         } catch {}
       }
-      throw new Error("listing temporarily backed off due to recent failures");
+      const terr = createTimeoutError();
+      terr.message = `Listing temporarily backed off due to recent failures (ref=${ref}, path=${path || "/"})`;
+      throw terr;
     }
     const lastTs = this.recentListingCalls.get(cacheKey) || 0;
     if (now - lastTs < FileManager.MIN_LISTING_INTERVAL_MS) {
@@ -266,6 +276,28 @@ export class FileManager {
     return (repoEvent as any)?.id || `${repoEvent.pubkey}`;
   }
 
+  private getCloneUrlsFromRepoEvent(repoEvent: RepoAnnouncementEvent): string[] {
+    try {
+      const parsed: any = parseRepoAnnouncementEvent(repoEvent as any) as any;
+      const clone = parsed?.clone;
+      if (Array.isArray(clone)) {
+        return clone.map((u: any) => String(u || "").trim()).filter(Boolean);
+      }
+    } catch {}
+
+    // Fallback: try direct tags (in case parser shape differs)
+    try {
+      const tags: any[] = (repoEvent as any)?.tags || [];
+      const urls = tags
+        .filter((t: any) => Array.isArray(t) && t[0] === "clone" && t[1])
+        .map((t: any) => String(t[1] || "").trim())
+        .filter(Boolean);
+      if (urls.length > 0) return urls;
+    } catch {}
+
+    return [];
+  }
+
   /**
    * Generate cache key for file operations
    */
@@ -320,7 +352,9 @@ export class FileManager {
           }
         } catch {}
       }
-      throw new Error("listing temporarily backed off due to recent failures");
+      const terr = createTimeoutError();
+      terr.message = `Listing temporarily backed off due to recent failures (branch=${shortBranch || "?"}, path=${path || "/"})`;
+      throw terr;
     }
     const lastTs = this.recentListingCalls.get(cacheKey) || 0;
     if (now - lastTs < FileManager.MIN_LISTING_INTERVAL_MS) {
@@ -342,32 +376,66 @@ export class FileManager {
       }
     }
 
-    try {
-      // Get files from worker
-      const pending = this.workerManager.listRepoFilesFromEvent({
-        repoEvent,
-        branch: shortBranch,
-        path,
-        repoKey,
-      });
-      this.inFlightListings.set(cacheKey, pending as unknown as Promise<FileListingResult>);
-      this.recentListingCalls.set(cacheKey, now);
-      const result = await pending;
+    const toFileListingResult = (filesRaw: any[], ref: string): FileListingResult => ({
+      files: (filesRaw || []).map(
+        (file: any): FileInfo => ({
+          path: file.path || file.name,
+          type: file.type || "file",
+          size: file.size,
+          mode: file.mode,
+          lastCommit: file.oid || file.sha,
+        })
+      ),
+      path,
+      ref,
+      fromCache: false,
+    });
 
-      const fileListingResult: FileListingResult = {
-        files: result.map(
-          (file: any): FileInfo => ({
-            path: file.path || file.name,
-            type: file.type || "file",
-            size: file.size,
-            mode: file.mode,
-            lastCommit: file.oid,
-          })
-        ),
-        path,
-        ref: shortBranch,
-        fromCache: false,
-      };
+    try {
+      const pending: Promise<FileListingResult> = (async () => {
+        // Vendor-first (router handles worker fallback internally)
+        if (this.vendorReadRouter) {
+          const cloneUrls = this.getCloneUrlsFromRepoEvent(repoEvent);
+          const vendorRes = await this.vendorReadRouter.listDirectory({
+            workerManager: this.workerManager,
+            repoEvent,
+            repoKey,
+            cloneUrls,
+            branch: shortBranch,
+            path,
+          });
+
+          const files = (vendorRes.files || []).map(
+            (f: any): FileInfo => ({
+              path: f.path || "",
+              type: f.type || "file",
+              size: f.size,
+              mode: f.mode,
+              lastCommit: f.oid,
+            })
+          );
+
+          return {
+            files,
+            path: vendorRes.path || path,
+            ref: vendorRes.ref || (shortBranch || "").split("/").pop() || "",
+            fromCache: false,
+          };
+        }
+
+        // Worker-only fallback (no vendor router configured)
+        const workerRaw = await this.workerManager.listRepoFilesFromEvent({
+          repoEvent,
+          branch: shortBranch,
+          path,
+          repoKey,
+        });
+        return toFileListingResult(workerRaw, shortBranch);
+      })();
+
+      this.inFlightListings.set(cacheKey, pending);
+      this.recentListingCalls.set(cacheKey, now);
+      const fileListingResult = await pending;
 
       // Cache the result if enabled
       if (this.config.enableCaching && this.cacheManager) {
@@ -381,7 +449,12 @@ export class FileManager {
 
       return fileListingResult;
     } catch (error: any) {
-      if (error instanceof Error && error.message.includes("Could not find")) {
+      // Preserve existing alternative-branch fallback, but only for likely-ref errors and root-ish listings
+      const msg = error instanceof Error ? error.message : String(error);
+      const isRootish = !path || path === "/" || path === "";
+      const looksLikeRefError = /could not find|unknown ref|not found.*ref|branch/i.test(msg);
+
+      if (isRootish && looksLikeRefError) {
         const alternatives = shortBranch === "main" ? ["master", "develop"] : ["main", "master"];
 
         for (const altBranch of alternatives) {
@@ -393,36 +466,24 @@ export class FileManager {
               repoKey,
             });
 
-            const fileListingResult: FileListingResult = {
-              files: result.map(
-                (file: any): FileInfo => ({
-                  path: file.path || file.name,
-                  type: file.type || "file",
-                  size: file.size,
-                  mode: file.mode,
-                  lastCommit: file.oid,
-                })
-              ),
-              path,
-              ref: altBranch,
-              fromCache: false,
-            };
+            const altListing: FileListingResult = toFileListingResult(result, altBranch);
 
             if (this.config.enableCaching && this.cacheManager) {
               await this.cacheManager.set(
                 "file_listing",
                 cacheKey.replace(shortBranch, altBranch),
-                fileListingResult,
+                altListing,
                 this.config.listingCacheTTL
               );
             }
 
-            return fileListingResult;
-          } catch (altError) {
+            return altListing;
+          } catch {
             continue;
           }
         }
       }
+
       // Apply failure backoff for this key
       this.failureBackoffUntil.set(cacheKey, Date.now() + FileManager.FAILURE_BACKOFF_MS);
       // Avoid spamming toasts for the same key too frequently
@@ -477,7 +538,52 @@ export class FileManager {
     }
 
     try {
-      // Get content from worker
+      // Vendor-first only when reading by branch (commit reads stay on worker)
+      if (this.vendorReadRouter && !commit) {
+        const cloneUrls = this.getCloneUrlsFromRepoEvent(repoEvent);
+        const vendorRes = await this.vendorReadRouter.getFileContent({
+          workerManager: this.workerManager,
+          repoEvent,
+          repoKey,
+          cloneUrls,
+          branch: ref,
+          path,
+        });
+
+        const result: FileContent = {
+          content: vendorRes.content || "",
+          path,
+          ref: vendorRes.ref || ref,
+          encoding: vendorRes.encoding || "utf-8",
+          size:
+            typeof vendorRes.size === "number"
+              ? vendorRes.size
+              : (vendorRes.content || "").length,
+          fromCache: false,
+        };
+
+        // Cache the result if enabled and file is not too large
+        if (
+          this.config.enableCaching &&
+          this.cacheManager &&
+          result.size <= this.config.maxCacheFileSize
+        ) {
+          try {
+            await this.cacheManager.set(
+              "file_content",
+              cacheKey,
+              result,
+              this.config.contentCacheTTL
+            );
+          } catch (error) {
+            console.warn("Cache write failed for file content:", error);
+          }
+        }
+
+        return result;
+      }
+
+      // Worker fallback (and always for commit-based reads)
       const content = await this.workerManager.getRepoFileContentFromEvent({
         repoEvent,
         branch: commit ? ("" as any) : ref,

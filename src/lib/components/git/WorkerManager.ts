@@ -1,14 +1,14 @@
-import {
-  listBranchesFromEvent,
-  listRepoFilesFromEvent,
-  getRepoFileContentFromEvent,
-  fileExistsAtCommit,
-  getCommitInfo,
-  getFileHistory,
-  getCommitHistory,
-} from "@nostr-git/core/git";
 import { getGitWorker } from "@nostr-git/core";
 import type { RepoAnnouncementEvent } from "@nostr-git/core/events";
+import {
+  createAuthRequiredError,
+  createNetworkError,
+  createTimeoutError,
+  createFsError,
+  createUnknownError,
+  wrapError,
+  FatalError,
+} from "@nostr-git/core/errors";
 
 export interface WorkerProgressEvent {
   repoId: string;
@@ -104,10 +104,46 @@ export class WorkerManager {
       this.initInFlight = null;
     }
   }
+
+  /**
+   * Execute a git operation in the worker
+   */
   async execute<T>(operation: string, params: any, options?: { timeoutMs?: number }): Promise<T> {
+    const ctxFrom = (p: any): string => {
+      if (!p) return "";
+      if (typeof p !== "object") return "";
+      const parts: string[] = [];
+      const repoId = p.repoId || p.repoKey;
+      if (repoId) parts.push(`repoId=${String(repoId)}`);
+      const remoteUrl = p.remoteUrl;
+      if (remoteUrl) parts.push(`remote=${String(remoteUrl)}`);
+      const branch = p.branch || p.targetBranch;
+      if (branch) parts.push(`branch=${String(branch)}`);
+      const path = p.path;
+      if (path) parts.push(`path=${String(path)}`);
+      const commit = p.commit || p.commitId;
+      if (commit) parts.push(`commit=${String(commit)}`);
+      return parts.length ? ` (${parts.join(", ")})` : "";
+    };
+
+    const withCause = (cause: unknown, err: Error): Error => {
+      try {
+        // Prefer library helper to preserve cause/stack/metadata if available
+        return (wrapError as any)(cause, err) as Error;
+      } catch {
+        (err as any).cause = cause;
+        return err;
+      }
+    };
+
+    const ctx = ctxFrom(params);
+
     if (!this.isInitialized || !this.api) {
-      throw new Error("WorkerManager not initialized. Call initialize() first.");
+      const err = createUnknownError();
+      err.message = `WorkerManager not initialized. Call initialize() first.${ctx}`;
+      throw err;
     }
+
     try {
       let safeParams = params;
       try {
@@ -118,32 +154,37 @@ export class WorkerManager {
 
       const method = (this.api as any)[operation];
 
-      if (typeof method !== 'function') {
-        console.warn(`[WorkerManager] Requested operation '${operation}' not found in worker API`);
-        throw new Error(`Operation '${operation}' is not supported by current worker.`);
+      if (typeof method !== "function") {
+        throw new FatalError(`Operation '${operation}' is not supported by current worker.${ctx}`);
       }
 
       // Check if params are actually serializable
       try {
-        const serialized = JSON.stringify(safeParams, null, 2);
+        JSON.stringify(safeParams, null, 2);
       } catch (serError) {
-        console.error('[WorkerManager] Params NOT serializable!', serError);
-        throw new Error(`Cannot serialize params for ${operation}: ${serError}`);
+        const err = createUnknownError();
+        err.message = `Cannot serialize params for '${operation}'.${ctx}`;
+        throw withCause(serError, err);
       }
-      
-      // Check if method is actually a function
-      
+
       // Add timeout to detect hanging worker calls
       // Allow custom timeout to be specified for long-running background operations
-      const timeoutMs = options?.timeoutMs ?? (
-        operation === 'analyzePatchMerge' ? 90000 : 30000
-      );
+      const timeoutMs =
+        options?.timeoutMs ??
+        (operation === "analyzePatchMerge" ? 90000 : 30000);
 
       // If timeout is 0 or negative, don't apply timeout (for truly long-running background ops)
       if (timeoutMs > 0) {
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error(`Worker operation '${operation}' timed out after ${timeoutMs}ms`)), timeoutMs);
+          const t = setTimeout(() => {
+            const terr = createTimeoutError();
+            terr.message = `Worker operation '${operation}' timed out after ${timeoutMs}ms.${ctx}`;
+            reject(terr);
+          }, timeoutMs);
+          // Avoid leaking timers in unusual promise scheduling cases
+          void t;
         });
+
         const resultPromise = method(safeParams);
         const result = await Promise.race([resultPromise, timeoutPromise]);
         try {
@@ -161,12 +202,61 @@ export class WorkerManager {
         }
       }
     } catch (error) {
-      console.error('[WorkerManager] execute error:', error);
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg && msg.includes("Proxy object could not be cloned")) {
-        throw new Error(`Worker returned a non-transferable value for '${operation}'.`);
+      console.error("[WorkerManager] execute error:", error);
+
+      // Pass through typed errors as-is
+      if (error instanceof Error) {
+        const name = (error as any).name || "";
+        if (name === "FatalError" || name === "RetriableError" || name === "UserActionableError") {
+          throw error;
+        }
       }
-      throw error;
+
+      const msg = error instanceof Error ? error.message : String(error);
+      const lowered = (msg || "").toLowerCase();
+
+      // Comlink clone errors / worker capability mismatches should be fatal
+      if (msg && msg.includes("Proxy object could not be cloned")) {
+        const ferr = new FatalError(`Worker returned a non-transferable value for '${operation}'.${ctx}`);
+        throw withCause(error, ferr);
+      }
+
+      // Auth-ish errors
+      if (
+        /unauthorized|forbidden|permission denied|auth|token|401|403/.test(lowered)
+      ) {
+        const aerr = createAuthRequiredError();
+        aerr.message = `Authentication required for '${operation}'.${ctx}`;
+        throw withCause(error, aerr);
+      }
+
+      // Timeout-ish errors
+      if (/timed out|timeout/.test(lowered)) {
+        const terr = createTimeoutError();
+        terr.message = `Worker operation '${operation}' timed out.${ctx}`;
+        throw withCause(error, terr);
+      }
+
+      // Network-ish errors
+      if (
+        /failed to fetch|networkerror|fetch failed|econnreset|enotfound|eai_again/.test(lowered)
+      ) {
+        const nerr = createNetworkError();
+        nerr.message = `Network error during '${operation}'.${ctx}`;
+        throw withCause(error, nerr);
+      }
+
+      // FS-ish errors (isomorphic-git and browser fs backends often emit these)
+      if (/enoent|eacces|eperm|enospc|notfounderror/.test(lowered)) {
+        const ferr = createFsError();
+        ferr.message = `Filesystem error during '${operation}'.${ctx}`;
+        throw withCause(error, ferr);
+      }
+
+      // Unknown
+      const uerr = createUnknownError();
+      uerr.message = `Worker operation '${operation}' failed.${ctx}`;
+      throw withCause(error, uerr);
     }
   }
 
@@ -308,27 +398,15 @@ export class WorkerManager {
   }
 
   /**
-   * List branches from repository event
+   * List branches from repository event (RPC)
    */
   async listBranchesFromEvent(params: { repoEvent: RepoAnnouncementEvent }): Promise<any> {
-    /**
-     * WARNING: This is a thin helper that returns raw local git branch names from the
-     * UI thread by calling the core function directly. It does NOT interpret NIP-34
-     * RepoState refs or HEAD and therefore must not be used to determine a default
-     * branch or to render the final branch selector on its own.
-     *
-     * For authoritative branch handling, including mapping of NIP-34 refs (refs/heads/*, refs/tags/*)
-     * and HEAD resolution with multi-fallback defaults, use BranchManager:
-     *   packages/nostr-git/packages/ui/src/lib/components/git/BranchManager.ts
-     *
-     * TODO: When the worker exposes an equivalent RPC, route this through `this.execute('listBranchesFromEvent', ...)`
-     * to keep FS/git access confined to the worker for consistency.
-     */
-    return await listBranchesFromEvent(params);
+    await this.initialize();
+    return this.execute("listBranchesFromEvent", params);
   }
 
   /**
-   * List repository files
+   * List repository files (RPC)
    */
   async listRepoFilesFromEvent(params: {
     repoEvent: RepoAnnouncementEvent;
@@ -336,11 +414,12 @@ export class WorkerManager {
     path?: string;
     repoKey?: string;
   }): Promise<any> {
-    return await listRepoFilesFromEvent(params);
+    await this.initialize();
+    return this.execute("listRepoFilesFromEvent", params);
   }
 
   /**
-   * Get repository file content
+   * Get repository file content (RPC)
    */
   async getRepoFileContentFromEvent(params: {
     repoEvent: RepoAnnouncementEvent;
@@ -349,12 +428,12 @@ export class WorkerManager {
     commit?: string;
     repoKey?: string;
   }): Promise<any> {
-    return await getRepoFileContentFromEvent(params);
+    await this.initialize();
+    return this.execute("getRepoFileContentFromEvent", params);
   }
 
   /**
-   * List tree at a specific commit (for tag browsing)
-   * NOTE: Requires worker API support for listTreeAtCommit.
+   * List tree at a specific commit (for tag browsing) (RPC)
    */
   async listTreeAtCommit(params: {
     repoEvent: RepoAnnouncementEvent;
@@ -362,35 +441,12 @@ export class WorkerManager {
     path?: string;
     repoKey?: string;
   }): Promise<any> {
-    if (!this.isInitialized || !this.api) {
-      throw new Error("WorkerManager not initialized");
-    }
-    try {
-      if (!this.api || typeof (this.api as any).listTreeAtCommit !== "function") {
-        throw new Error("Worker does not support listTreeAtCommit (update worker to enable tag browsing)");
-      }
-      // Ensure params are structured-cloneable to avoid DataCloneError across Comlink boundary
-      let safeParams = params;
-      try {
-        safeParams = JSON.parse(JSON.stringify(params));
-      } catch {
-        /* fall back to original */
-      }
-      // Call through to worker API (must be implemented there)
-      const result = await (this.api as any).listTreeAtCommit(safeParams);
-      try {
-        return JSON.parse(JSON.stringify(result));
-      } catch {
-        return result;
-      }
-    } catch (error) {
-      console.error("listTreeAtCommit failed:", error);
-      throw error;
-    }
+    await this.initialize();
+    return this.execute("listTreeAtCommit", params);
   }
 
   /**
-   * Check if file exists at commit
+   * Check if file exists at commit (RPC)
    */
   async fileExistsAtCommit(params: {
     repoEvent: RepoAnnouncementEvent;
@@ -399,18 +455,20 @@ export class WorkerManager {
     commit?: string;
     repoKey?: string;
   }): Promise<any> {
-    return await fileExistsAtCommit(params);
+    await this.initialize();
+    return this.execute("fileExistsAtCommit", params);
   }
 
   /**
-   * Get commit information
+   * Get commit information (RPC)
    */
   async getCommitInfo(params: { repoEvent: RepoAnnouncementEvent; commit: string }): Promise<any> {
-    return await getCommitInfo(params);
+    await this.initialize();
+    return this.execute("getCommitInfo", params);
   }
 
   /**
-   * Get file history
+   * Get file history (RPC)
    */
   async getFileHistory(params: {
     repoEvent: RepoAnnouncementEvent;
@@ -419,22 +477,24 @@ export class WorkerManager {
     maxCount?: number;
     repoKey?: string;
   }): Promise<any> {
-    return await getFileHistory(params);
+    await this.initialize();
+    return this.execute("getFileHistory", params);
   }
 
   /**
-   * Get commit history (alternative method using core function)
+   * Get commit history (alternative method using repo event) (RPC)
    */
   async getCommitHistoryFromEvent(params: {
     repoEvent: RepoAnnouncementEvent;
     branch: string;
     depth?: number;
   }): Promise<any> {
-    return await getCommitHistory(params);
+    await this.initialize();
+    return this.execute("getCommitHistoryFromEvent", params);
   }
 
   /**
-   * Apply a patch and push to remotes
+   * Apply a patch and push to remotes (RPC)
    */
   async applyPatchAndPush(params: {
     repoId: string;
@@ -453,9 +513,7 @@ export class WorkerManager {
     pushErrors?: Array<{ remote: string; url: string; error: string; code: string; stack: string }>;
   }> {
     await this.initialize();
-
-    const result = await this.api.applyPatchAndPush(params);
-    return result;
+    return this.execute("applyPatchAndPush", params, { timeoutMs: 120000 });
   }
 
   /**
@@ -534,27 +592,22 @@ export class WorkerManager {
   }
 
   /**
-   * Reset repository to match remote HEAD state
+   * Reset repository to match remote HEAD state (RPC)
    * This performs a hard reset to remove any local commits that diverge from remote
    */
   async resetRepoToRemote(repoId: string, branch?: string): Promise<any> {
-    if (!this.isInitialized || !this.api) {
-      throw new Error("WorkerManager not initialized");
+    await this.initialize();
+
+    const result = await this.execute("resetRepoToRemote", { repoId, branch }, { timeoutMs: 60000 });
+
+    if (!result?.success) {
+      const err = createUnknownError();
+      err.message = `Reset to remote failed (repoId=${repoId}${branch ? `, branch=${branch}` : ""})`;
+      throw err;
     }
 
-    try {
-      const result = await this.api.resetRepoToRemote({ repoId, branch });
-
-      if (!result.success) {
-        throw new Error(result.error || "Reset to remote failed");
-      }
-
-      console.log(`Repository ${repoId} reset to remote commit ${result.remoteCommit}`);
-      return result;
-    } catch (error) {
-      console.error(`WorkerManager: Reset to remote failed for ${repoId}:`, error);
-      throw error;
-    }
+    console.log(`Repository ${repoId} reset to remote commit ${result.remoteCommit}`);
+    return result;
   }
 
   /**

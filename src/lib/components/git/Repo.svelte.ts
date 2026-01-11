@@ -11,6 +11,7 @@ import type {
 } from "@nostr-git/core/events";
 import type { MergeAnalysisResult } from "@nostr-git/core/git";
 import type { Readable } from "svelte/store";
+import { createPermissionDeniedError } from "@nostr-git/core/errors";
 
 import {
   parseRepoAnnouncementEvent,
@@ -51,6 +52,8 @@ export class Repo {
   clone: string[] = $state([]);
   web: string[] = $state([]);
   address: string = $state("");
+  viewerPubkey: string | null = $state(null);
+  editable: boolean = $state(false);
 
   repoEvent: RepoAnnouncementEvent | undefined = $state(undefined);
   #repo: RepoAnnouncement | undefined = $state(undefined);
@@ -114,6 +117,7 @@ export class Repo {
     branches: null as string | null,
     clone: null as string | null,
   };
+  #viewerPubkeyUnsub?: () => void;
 
   // Clone progress state
   cloneProgress = $state<CloneProgress>({
@@ -123,6 +127,19 @@ export class Repo {
   });
 
   syncStatus: any = $state(null);
+
+  #updateEditable() {
+    const viewer = this.viewerPubkey;
+    this.editable = !!(viewer && this.isAuthorized(viewer));
+  }
+
+  assertEditable() {
+    if (!this.editable) {
+      const error = createPermissionDeniedError();
+      error.message = `Editing requires maintainer permissions for repo ${this.key || this.name || "repository"}`;
+      throw error;
+    }
+  }
 
   // Feature flag: controls whether background merge analysis runs automatically
   #autoMergeAnalysisEnabled: boolean = false;
@@ -136,6 +153,7 @@ export class Repo {
     statusEvents,
     commentEvents,
     labelEvents,
+    viewerPubkey,
   }: {
     repoEvent: Readable<RepoAnnouncementEvent>;
     repoStateEvent: Readable<RepoStateEvent>;
@@ -145,6 +163,7 @@ export class Repo {
     statusEvents?: Readable<StatusEvent[]>;
     commentEvents?: Readable<CommentEvent[]>;
     labelEvents?: Readable<LabelEvent[]>;
+    viewerPubkey?: Readable<string | null>;
   }) {
     // Initialize WorkerManager first
     this.workerManager = new WorkerManager((progressEvent: WorkerProgressEvent) => {
@@ -169,6 +188,15 @@ export class Repo {
         console.warn("🔐 Failed to update worker auth config from token changes:", e);
       }
     });
+
+    if (viewerPubkey) {
+      this.#viewerPubkeyUnsub = viewerPubkey.subscribe((pubkey) => {
+        this.viewerPubkey = pubkey;
+        this.#updateEditable();
+      });
+    } else {
+      this.#updateEditable();
+    }
 
     // Initialize cache managers
     this.cacheManager = new CacheManager();
@@ -256,6 +284,7 @@ export class Repo {
         this.earliestUniqueCommit = this.#repo!.earliestUniqueCommit!;
         this.createdAt = this.#repo!.createdAt;
         this.address = this.#repo!.address;
+        this.#updateEditable();
       }
     });
 
@@ -1393,6 +1422,10 @@ export class Repo {
   }
 
   dispose() {
+    if (this.#viewerPubkeyUnsub) {
+      this.#viewerPubkeyUnsub();
+      this.#viewerPubkeyUnsub = undefined;
+    }
     this.cacheManager?.dispose();
     // MergeAnalysisCacheManager doesn't have a dispose method - it's managed by CacheManager
     this.patchManager?.dispose();
@@ -1408,6 +1441,7 @@ export class Repo {
   // -------------------------
   async writeFileLocal({ path, content }: { path: string; content: string }): Promise<void> {
     if (!this.fileManager) throw new Error("FileManager unavailable");
+    this.assertEditable();
     // Prefer a dedicated write API if present; otherwise, fall back to a generic method
     const anyFm: any = this.fileManager as any;
     if (typeof anyFm.writeFileLocal === "function") {
@@ -1423,6 +1457,7 @@ export class Repo {
 
   async commit({ message }: { message: string }): Promise<{ commitId: string }> {
     if (!this.workerManager) throw new Error("WorkerManager unavailable");
+    this.assertEditable();
     const branch = this.selectedBranch || this.mainBranch;
     const anyWm: any = this.workerManager as any;
     if (typeof anyWm.commit === "function") {
