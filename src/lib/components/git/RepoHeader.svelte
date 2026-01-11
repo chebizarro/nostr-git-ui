@@ -12,7 +12,6 @@
     children,
     refreshRepo,
     isRefreshing = false,
-    userPubkey,
     forkRepo,
     settingsRepo,
     overviewRepo,
@@ -28,19 +27,13 @@
     overviewRepo?: () => void;
     isRefreshing?: boolean;
     settingsRepo?: () => void;
-    userPubkey?: string;
     bookmarkRepo?: () => void | Promise<void>;
     isBookmarked?: boolean;
     isTogglingBookmark?: boolean;
   } = $props();
   const name = $state(repoClass.name);
   const description = $state(repoClass.description);
-  let isAuthorized = $state(false);
-  $effect(() => {
-    if (userPubkey) {
-      isAuthorized = repoClass.isAuthorized(userPubkey);
-    }
-  });
+  const canEdit = $derived.by(() => !!repoClass.editable);
 </script>
 
 <div class="border-b border-border pb-4">
@@ -90,7 +83,7 @@
         <RotateCcw class="h-4 w-4 {isRefreshing ? 'animate-spin' : ''}" />
         <span class="hidden sm:inline">{isRefreshing ? "Syncing..." : "Refresh"}</span>
       </Button>
-      {#if isAuthorized}
+      {#if canEdit}
         <Button
           variant="outline"
           size="sm"
@@ -120,14 +113,9 @@
 </div>
 
 <style>
-  /* Hide scrollbar for Chrome, Safari and Opera */
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-
-  /* Hide scrollbar for IE, Edge and Firefox */
-  .scrollbar-hide {
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */
+  /* Ensure long commit messages don't break layout */
+  .break-words {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   }
 </style>

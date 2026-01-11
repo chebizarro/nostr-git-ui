@@ -3,6 +3,7 @@
   import { useRegistry } from "../../useRegistry.js";
   const { Button, Spinner } = useRegistry();
   import { toast } from "../../stores/toast.js";
+  import { toUserMessage } from "../../utils/gitErrorUi";
   import type { FileEntry, PermalinkEvent } from "@nostr-git/core/types";
   import { GIT_PERMALINK } from "@nostr-git/core/types";
   import type { Repo } from "./Repo.svelte";
@@ -27,7 +28,7 @@
     setDirectory,
     repo,
     publish,
-    editable = true,
+    editable,
   }: {
     file: FileEntry;
     getFileContent: (path: string) => Promise<string>;
@@ -36,6 +37,19 @@
     publish?: (permalink: PermalinkEvent) => Promise<void>;
     editable?: boolean;
   } = $props();
+
+  const effectiveEditable = $derived.by(() =>
+    typeof editable === "boolean" ? editable : (repo?.editable ?? false)
+  );
+
+  const pushErrorToast = (title: string, err: unknown, fallback?: string) => {
+    const { message, theme } = toUserMessage(err, fallback ?? title);
+    toast.push({
+      title,
+      description: message,
+      variant: theme === "warning" ? "default" : "destructive",
+    });
+  };
 
   const name = $derived(file.name);
   const type = $derived((file.type ?? "file") as string);
@@ -88,11 +102,7 @@
             void loadLanguageExtension(name, fileTypeInfo);
           })
           .catch((error) => {
-            toast.push({
-              title: "Failed to load file content",
-              description: error.message,
-              variant: "destructive",
-            });
+            pushErrorToast("Failed to load file content", error, "Failed to load file content");
           })
           .finally(() => {
             isLoading = false;
@@ -419,32 +429,32 @@
         title: "Copied to clipboard",
         description: `${name} content has been copied to your clipboard.`,
       });
-    } catch {
-      toast.push({
-        title: "Failed to copy",
-        description: "Could not copy the content to clipboard.",
-        variant: "destructive",
-      });
+    } catch (e) {
+      pushErrorToast("Failed to copy", e, "Could not copy the content to clipboard.");
     }
   }
 
   async function downloadFile(event: MouseEvent | undefined) {
     event?.stopPropagation();
-    if (!content) {
-      content = await getFileContent(path);
-    }
+    try {
+      if (!content) {
+        content = await getFileContent(path);
+      }
 
-    // Use application/octet-stream for binary files to prevent extension changes
-    const mimeType = fileTypeInfo?.mimeType || "application/octet-stream";
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name; // Use the original filename with its extension
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+      // Use application/octet-stream for binary files to prevent extension changes
+      const mimeType = fileTypeInfo?.mimeType || "application/octet-stream";
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name; // Use the original filename with its extension
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      pushErrorToast("Download failed", e, "Failed to download file.");
+    }
   }
 
   function shareLink(event?: MouseEvent) {
@@ -648,7 +658,7 @@
       }
     } catch (e: any) {
       console.error("Failed to create permalink", e);
-      toast.push({ title: "Error", description: e?.message || String(e), variant: "destructive" });
+      pushErrorToast("Permalink failed", e, "Failed to create permalink.");
     }
   }
 
@@ -727,7 +737,7 @@
         <Button variant="ghost" size="sm" class="h-8 w-8 p-0" onclick={downloadFile}>
           <Download class="h-4 w-4" />
         </Button>
-        {#if editable && fileTypeInfo?.canEdit !== false}
+        {#if fileTypeInfo?.canEdit !== false}
           <Button variant="ghost" size="sm" class="h-8 w-8 p-0" onclick={copyContent}>
             <Copy class="h-4 w-4" />
           </Button>
