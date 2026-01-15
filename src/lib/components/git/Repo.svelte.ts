@@ -11,7 +11,7 @@ import type {
 } from "@nostr-git/core/events";
 import type { MergeAnalysisResult } from "@nostr-git/core/git";
 import type { Readable } from "svelte/store";
-import { createPermissionDeniedError, RetriableError, UserActionableError, FatalError } from "@nostr-git/core/errors";
+import { createPermissionDeniedError, RetriableError, UserActionableError, FatalError, GitErrorCode } from "@nostr-git/core/errors";
 
 import {
   parseRepoAnnouncementEvent,
@@ -177,6 +177,7 @@ export class Repo {
     labelEvents,
     viewerPubkey,
     workerConfig,
+    workerManager: existingWorkerManager,
   }: {
     repoEvent: Readable<RepoAnnouncementEvent>;
     repoStateEvent: Readable<RepoStateEvent>;
@@ -188,19 +189,35 @@ export class Repo {
     labelEvents?: Readable<LabelEvent[]>;
     viewerPubkey?: Readable<string | null>;
     workerConfig?: { workerFactory?: () => Worker; workerUrl?: string | URL };
+    /** Optional: pass an existing WorkerManager to share across Repo instances */
+    workerManager?: WorkerManager;
   }) {
-    // Initialize WorkerManager first with optional worker config from consuming app
-    this.workerManager = new WorkerManager(
-      (progressEvent: WorkerProgressEvent) => {
+    // Use provided WorkerManager or create a new one
+    if (existingWorkerManager) {
+      this.workerManager = existingWorkerManager;
+      // Set up progress callback on the shared manager
+      this.workerManager.setProgressCallback((progressEvent: WorkerProgressEvent) => {
         console.log(`Clone progress for ${progressEvent.repoId}: ${progressEvent.phase}`);
         this.cloneProgress = {
           isCloning: true,
           phase: progressEvent.phase,
           progress: progressEvent.progress,
         };
-      },
-      workerConfig
-    );
+      });
+    } else {
+      // Initialize WorkerManager with optional worker config from consuming app
+      this.workerManager = new WorkerManager(
+        (progressEvent: WorkerProgressEvent) => {
+          console.log(`Clone progress for ${progressEvent.repoId}: ${progressEvent.phase}`);
+          this.cloneProgress = {
+            isCloning: true,
+            phase: progressEvent.phase,
+            progress: progressEvent.progress,
+          };
+        },
+        workerConfig
+      );
+    }
 
     // Keep worker auth config synced with token store updates
     tokens.subscribe(async (t) => {
@@ -1577,7 +1594,7 @@ export class Repo {
 
     const repoId = this.key;
     if (!repoId) {
-      throw new FatalError("Cannot push: repository id is missing");
+      throw new FatalError("Cannot push: repository id is missing", GitErrorCode.INVALID_INPUT);
     }
 
     const mode: PushFanoutMode = params?.mode ?? "best-effort";
@@ -1603,7 +1620,8 @@ export class Repo {
 
     if (cloneUrls.length === 0) {
       throw new UserActionableError(
-        "Cannot push: no push-capable remotes found in repository clone URLs"
+        "Cannot push: no push-capable remotes found in repository clone URLs",
+        GitErrorCode.INVALID_INPUT
       );
     }
 
@@ -1655,7 +1673,7 @@ export class Repo {
             provider,
             host,
             success: false,
-            error: new UserActionableError(`Cannot push to remote: unable to determine host for ${remoteUrl}`),
+            error: new UserActionableError(`Cannot push to remote: unable to determine host for ${remoteUrl}`, GitErrorCode.INVALID_INPUT),
           });
           continue;
         }
@@ -1712,7 +1730,7 @@ export class Repo {
       const msg =
         `Push failed for ${failed.length}/${results.length} remotes: ` +
         failed.map((r) => r.host || r.remoteUrl).join(", ");
-      const err = new UserActionableError(msg);
+      const err = new UserActionableError(msg, GitErrorCode.PERMISSION_DENIED);
       (err as any).details = { branch, results };
       throw err;
     }
@@ -1721,7 +1739,7 @@ export class Repo {
       const msg =
         `Push failed for all ${results.length} remotes: ` +
         failed.map((r) => r.host || r.remoteUrl).join(", ");
-      const err = new RetriableError(msg);
+      const err = new RetriableError(msg, GitErrorCode.NETWORK_ERROR);
       (err as any).details = { branch, results };
       throw err;
     }
