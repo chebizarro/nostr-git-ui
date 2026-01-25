@@ -595,10 +595,13 @@ export function useNewRepo(options: UseNewRepoOptions = {}) {
                 },
               ]
             : undefined;
+        // For GRASP/ngit compatibility, the state event's d tag should be just the repo name
+        // (the "identifier"), not the full npub:name format. The npub:name format is for
+        // the announcement event's d tag and the "a" tag references.
         stateEvent = createStateEventShared({
-          repoId: canonicalRepoId,
+          repoId: config.name, // Just the repo name for the d tag
           refs,
-          head: headRef,
+          head: config.defaultBranch, // Just the branch name, not full refname
         });
         // Ensure explicit HEAD/ref tags are present (ngit-compatible)
         try {
