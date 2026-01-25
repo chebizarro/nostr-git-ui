@@ -9,21 +9,22 @@
     selectedProvider?: string;
     onProviderChange: (provider: string) => void;
     disabledProviders?: string[];
-    relayUrl?: string;
-    onRelayUrlChange?: (url: string) => void;
+    relayUrls?: string[];
+    onRelayUrlsChange?: (urls: string[]) => void;
     graspServerOptions: string[];
   }
   const {
     selectedProvider,
     onProviderChange,
     disabledProviders,
-    relayUrl,
-    onRelayUrlChange,
+    relayUrls,
+    onRelayUrlsChange,
     graspServerOptions,
   }: Props = $props();
 
   let tokens = $state<Token[]>([]);
-  let graspRelayUrl = $state<string>("");
+  let graspRelayUrls = $state<string[]>([]);
+  let newGraspRelayUrl = $state<string>("");
   let availableProviders = $state<
     {
       id: string;
@@ -49,16 +50,24 @@
     updateAvailableProviders();
   });
 
-  // Keep local input in sync if parent updates relayUrl prop
+  // Keep local input in sync if parent updates relayUrls prop
   $effect(() => {
-    const next = relayUrl || "";
-    if (graspRelayUrl !== next) {
-      graspRelayUrl = next;
+    const next = (relayUrls ?? []).map((u) => (u || "").trim()).filter(Boolean);
+    if (JSON.stringify(graspRelayUrls) !== JSON.stringify(next)) {
+      graspRelayUrls = next;
     }
   });
 
   function updateAvailableProviders() {
     const providers = [
+      {
+        id: "grasp",
+        name: "GRASP Relay",
+        host: "nostr-relay",
+        icon: "⚡",
+        description: "Create decentralized repository on Nostr relay",
+        hasToken: true, // GRASP uses Nostr signer, always available
+      },
       {
         id: "github",
         name: "GitHub",
@@ -91,19 +100,11 @@
         description: "Create repository on Bitbucket.org",
         hasToken: tokens.some((t) => t.host === "bitbucket.org"),
       },
-      {
-        id: "grasp",
-        name: "GRASP Relay",
-        host: "nostr-relay",
-        icon: "⚡",
-        description: "Create decentralized repository on Nostr relay",
-        hasToken: true, // GRASP uses Nostr signer, always available
-      },
     ];
 
     // Mark providers as disabled if they have name conflicts
     availableProviders = providers.map((provider) => {
-      const conflict = disabledProviders.includes(provider.id);
+      const conflict = (disabledProviders ?? []).includes(provider.id);
       const isGrasp = provider.id === "grasp";
       const isDisabled = isGrasp ? false : conflict;
       return {
@@ -111,7 +112,7 @@
         disabled: isDisabled,
         disabledReason: isDisabled ? "Repository name already exists" : undefined,
         // Keep GRASP selectable regardless of name conflicts; others require token and no conflict
-        hasToken: isGrasp ? false : provider.hasToken && !isDisabled,
+        hasToken: isGrasp ? true : provider.hasToken && !isDisabled,
       };
     });
 
@@ -128,12 +129,39 @@
     onProviderChange(providerId);
   }
 
-  function handleRelayUrlChange(e: Event) {
-    const value = (e.target as HTMLInputElement).value;
-    graspRelayUrl = value;
-    if (onRelayUrlChange) {
-      onRelayUrlChange(value);
+  function updateRelayUrls(next: string[]) {
+    const normalized = next
+      .map((u) => (u || "").trim().replace(/\/$/, ""))
+      .filter(Boolean);
+    graspRelayUrls = normalized;
+    onRelayUrlsChange?.(normalized);
+  }
+
+  function handleRelayUrlInputChange(index: number, value: string) {
+    const next = [...graspRelayUrls];
+    next[index] = value;
+    updateRelayUrls(next);
+  }
+
+  function addRelayUrl(value?: string) {
+    const v = (value || "").trim().replace(/\/$/, "");
+    const next = [...graspRelayUrls];
+    next.push(v);
+    updateRelayUrls(next);
+  }
+
+  function commitNewRelayUrl() {
+    const v = (newGraspRelayUrl || "").trim();
+    if (!v) return;
+    if (!graspRelayUrls.includes(v.replace(/\/$/, ""))) {
+      addRelayUrl(v);
     }
+    newGraspRelayUrl = "";
+  }
+
+  function removeRelayUrl(index: number) {
+    const next = graspRelayUrls.filter((_, i) => i !== index);
+    updateRelayUrls(next);
   }
 
   function isValidRelayUrl(url: string): boolean {
@@ -189,6 +217,76 @@
                   Uses Nostr signer for authentication
                 </p>
               {/if}
+
+              {#if provider.id === "grasp" && selectedProvider === "grasp"}
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                <!-- Inline GRASP relay URL pills - fieldset used for semantic grouping with event stopping -->
+                <fieldset class="mt-3 pt-3 border-t border-border border-x-0 border-b-0 p-0 m-0" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    {#each graspRelayUrls as url, idx (idx)}
+                      <span
+                        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-accent/20 text-accent-foreground border border-accent/30 {!isValidRelayUrl(url) ? 'border-red-500 bg-red-500/10' : ''}"
+                      >
+                        <span class="max-w-[180px] truncate" title={url}>{url.replace(/^wss?:\/\//, '')}</span>
+                        <button
+                          type="button"
+                          class="ml-0.5 hover:text-destructive focus:outline-none"
+                          onclick={(e) => { e.stopPropagation(); removeRelayUrl(idx); }}
+                          title="Remove"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    {/each}
+
+                    <!-- Inline add input -->
+                    <div class="inline-flex items-center">
+                      <input
+                        type="text"
+                        class="w-36 px-2 py-0.5 text-xs bg-background border border-input rounded-l-full focus:outline-none focus:ring-1 focus:ring-accent"
+                        placeholder="wss://relay..."
+                        bind:value={newGraspRelayUrl}
+                        onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitNewRelayUrl(); } }}
+                        onclick={(e) => e.stopPropagation()}
+                      />
+                      <button
+                        type="button"
+                        class="px-2 py-0.5 text-xs bg-accent text-accent-foreground rounded-r-full hover:bg-accent/80"
+                        onclick={(e) => { e.stopPropagation(); commitNewRelayUrl(); }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {#if graspServerOptions.length > 0}
+                    <div class="flex flex-wrap gap-1 mt-2">
+                      {#each graspServerOptions.filter(opt => !graspRelayUrls.includes(opt.trim().replace(/\/$/, ''))) as opt}
+                        <button
+                          type="button"
+                          class="px-2 py-0.5 text-xs rounded-full border border-dashed border-muted-foreground/50 text-muted-foreground hover:border-accent hover:text-accent"
+                          onclick={(e) => {
+                            e.stopPropagation();
+                            const trimmed = (opt || '').trim().replace(/\/$/, '');
+                            if (trimmed && !graspRelayUrls.includes(trimmed)) {
+                              updateRelayUrls([...graspRelayUrls, trimmed]);
+                            }
+                          }}
+                          title="Add {opt}"
+                        >
+                          + {opt.replace(/^wss?:\/\//, '')}
+                        </button>
+                      {/each}
+                    </div>
+                  {/if}
+
+                  {#if graspRelayUrls.some((u) => u && !isValidRelayUrl(u))}
+                    <p class="text-xs text-destructive mt-1">URLs must start with ws:// or wss://</p>
+                  {:else if graspRelayUrls.length === 0}
+                    <p class="text-xs text-muted-foreground mt-1">Add at least one relay URL</p>
+                  {/if}
+                </fieldset>
+              {/if}
             </div>
             <div class="flex items-center">
               {#if selectedProvider === provider.id}
@@ -222,55 +320,15 @@
       <p class="text-sm text-muted-foreground">Please select a Git service to continue.</p>
     </div>
   {:else if selectedProvider === "grasp"}
-    <div class="bg-muted/50 rounded-lg p-4 space-y-4">
+    <div class="bg-muted/50 rounded-lg p-4">
       <div class="flex items-center space-x-2">
         <div class="w-2 h-2 bg-green-500 rounded-full"></div>
         <p class="text-sm text-foreground">
-          Ready to create repository on <strong
-            >{availableProviders.find((p) => p.id === selectedProvider)?.name}</strong
-          >
+          Ready to create repository on <strong>GRASP Relay</strong>
+          {#if graspRelayUrls.length > 0}
+            <span class="text-muted-foreground">({graspRelayUrls.length} relay{graspRelayUrls.length > 1 ? 's' : ''})</span>
+          {/if}
         </p>
-      </div>
-
-      <div class="space-y-2">
-        <label for="relay-url" class="block text-sm font-medium text-foreground">
-          GRASP Relay URL
-        </label>
-        <input
-          id="relay-url"
-          type="text"
-          class="w-full px-3 py-2 bg-background border border-input rounded-md text-sm"
-          class:border-red-500={selectedProvider === "grasp" && !isValidRelayUrl(graspRelayUrl)}
-          value={graspRelayUrl}
-          oninput={handleRelayUrlChange}
-          placeholder="wss://relay.example.com"
-        />
-        {#if graspServerOptions.length > 0}
-          <div class="flex flex-wrap gap-2 mt-2">
-            {#each graspServerOptions as opt}
-              <button
-                type="button"
-                class="px-2 py-1 text-xs rounded border hover:bg-muted"
-                onclick={() => {
-                  graspRelayUrl = opt;
-                  if (onRelayUrlChange) onRelayUrlChange(opt);
-                }}
-                title={opt}
-              >
-                {opt}
-              </button>
-            {/each}
-          </div>
-        {/if}
-        {#if selectedProvider === "grasp" && graspRelayUrl && !isValidRelayUrl(graspRelayUrl)}
-          <p class="text-sm text-destructive mt-1">
-            Please enter a valid WebSocket URL (must start with ws:// or wss://)
-          </p>
-        {:else}
-          <p class="text-xs text-muted-foreground">
-            Enter the WebSocket URL of the GRASP relay where you want to create the repository
-          </p>
-        {/if}
       </div>
     </div>
   {:else}

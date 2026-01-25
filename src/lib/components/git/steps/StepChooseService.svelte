@@ -1,35 +1,31 @@
 <script lang="ts">
   import ProviderSelectionStep from "../ProviderSelectionStep.svelte";
-  import type { Token } from "../../../stores/tokens.js";
 
   interface Props {
-    tokens: Token[];
     selectedProvider: "github" | "gitlab" | "gitea" | "bitbucket" | "grasp" | null;
-    relayUrl?: string;
+    relayUrls?: string[];
     disabledProviders?: string[];
     onProviderChange: (p: "github" | "gitlab" | "gitea" | "bitbucket" | "grasp") => void;
-    onRelayUrlChange?: (url: string) => void;
+    onRelayUrlsChange?: (urls: string[]) => void;
     graspServerOptions?: string[];
   }
 
   const __props = $props();
-  const tokens = $derived(__props.tokens);
   const selectedProvider = $derived(__props.selectedProvider);
-  const relayUrl = $derived(__props.relayUrl);
+  const relayUrls = $derived(__props.relayUrls);
   const disabledProviders = $derived(__props.disabledProviders ?? []);
   const onProviderChange = $derived(__props.onProviderChange);
-  const onRelayUrlChange = $derived(__props.onRelayUrlChange);
+  const onRelayUrlsChange = $derived(__props.onRelayUrlsChange);
   const graspServerOptions = $derived(__props.graspServerOptions ?? []);
 </script>
 
 <div class="space-y-4 max-h-[40vh] md:max-h-[50vh]">
   <ProviderSelectionStep
-    tokens={tokens}
     selectedProvider={selectedProvider || undefined}
     onProviderChange={onProviderChange as any}
     disabledProviders={disabledProviders}
-    relayUrl={relayUrl || ""}
-    onRelayUrlChange={onRelayUrlChange as any}
+    relayUrls={relayUrls || []}
+    onRelayUrlsChange={onRelayUrlsChange as any}
     graspServerOptions={graspServerOptions}
   />
 </div>

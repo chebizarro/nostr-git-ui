@@ -63,6 +63,8 @@
       }>
     >;
     searchRelays?: (query: string) => Promise<string[]>;
+    /** Callback to create NIP-98 auth header for GRASP push (must be called on main thread) */
+    createAuthHeader?: (url: string, method?: string) => Promise<string | null>;
   }
 
   const {
@@ -76,6 +78,7 @@
     getProfile,
     searchProfiles,
     searchRelays,
+    createAuthHeader,
   }: Props = $props();
 
   console.log("defaultRelays", defaultRelays);
@@ -84,6 +87,7 @@
   const { createRepository, isCreating, progress, error, reset } = useNewRepo({
     workerApi, // Pass the worker API from props
     workerInstance, // Pass the worker instance from props
+    createAuthHeader, // Pass the NIP-98 auth header callback for GRASP push
     onProgress: (steps) => {
       // Transform status to completed boolean for RepoProgressStep
       progressSteps = steps.map((step) => ({
@@ -104,7 +108,7 @@
   // Token management
   let tokens = $state<Token[]>([]);
   let selectedProvider = $state<string | undefined>(undefined);
-  let graspRelayUrl = $state<string>("");
+  let graspRelayUrls = $state<string[]>([]);
   let userEditedWebUrl = $state(false);
   let userEditedCloneUrl = $state(false);
 
@@ -112,6 +116,15 @@
   let graspServerOptions = $state<string[]>([]);
   graspServersStore.subscribe((urls) => {
     graspServerOptions = urls;
+  });
+
+  $effect(() => {
+    // Pre-populate GRASP relay URLs from the user's saved GRASP relay set
+    void selectedProvider;
+    void graspServerOptions;
+    if (selectedProvider === "grasp" && graspRelayUrls.length === 0 && graspServerOptions.length > 0) {
+      graspRelayUrls = [...graspServerOptions];
+    }
   });
 
   // Repository name availability tracking
@@ -265,7 +278,7 @@
         selectedProvider as string,
         name,
         tokens,
-        selectedProvider === "grasp" ? graspRelayUrl : undefined
+        selectedProvider === "grasp" ? graspRelayUrls[0] : undefined
       );
       nameAvailabilityResults = results;
     } catch (error) {
@@ -384,12 +397,13 @@
     updateAdvancedDefaults();
   }
 
-  // GRASP relay URL handler
-  function handleRelayUrlChange(url: string) {
-    graspRelayUrl = url;
-    const { wsOrigin } = deriveOrigins(url);
-    const relayTarget = wsOrigin || url;
-    if (selectedProvider === "grasp") {
+  // GRASP relay URLs handler
+  function handleRelayUrlsChange(urls: string[]) {
+    graspRelayUrls = urls;
+    const primary = urls[0] || "";
+    const { wsOrigin } = deriveOrigins(primary);
+    const relayTarget = wsOrigin || primary;
+    if (selectedProvider === "grasp" && relayTarget) {
       try {
         window.dispatchEvent(
           new CustomEvent("nostr-git:set-relay-override", { detail: { relays: [relayTarget] } })
@@ -407,15 +421,19 @@
   // Validate relay URL for GRASP provider
   function isValidGraspConfig(): boolean {
     if (selectedProvider !== "grasp") return true;
-    return (
-      graspRelayUrl.trim() !== "" &&
-      (graspRelayUrl.startsWith("wss://") || graspRelayUrl.startsWith("ws://"))
-    );
+    const urls = graspRelayUrls || [];
+    if (urls.length === 0) return false;
+    return urls.every((u) => {
+      const v = (u || "").trim();
+      return v !== "" && (v.startsWith("wss://") || v.startsWith("ws://"));
+    });
   }
 
   // Repository creation using useNewRepo hook
   async function startRepositoryCreation() {
     if (!validateStep1()) return;
+
+    if (!selectedProvider) return;
 
     try {
       await createRepository({
@@ -425,8 +443,9 @@
         gitignoreTemplate: advancedSettings.gitignoreTemplate,
         licenseTemplate: advancedSettings.licenseTemplate,
         defaultBranch: advancedSettings.defaultBranch,
-        provider: selectedProvider, // Pass the selected provider
-        relayUrl: selectedProvider === "grasp" ? graspRelayUrl : undefined, // Pass relay URL for GRASP
+        provider: selectedProvider as string, // Pass the selected provider
+        relayUrls: selectedProvider === "grasp" ? graspRelayUrls : undefined, // Pass relay URLs for GRASP
+        relayUrl: selectedProvider === "grasp" ? graspRelayUrls[0] : undefined, // Primary relay for backward compatibility
         authorName: advancedSettings.authorName,
         authorEmail: advancedSettings.authorEmail,
         authorPubkey: userPubkey,
@@ -621,15 +640,12 @@
     class="bg-card text-card-foreground rounded-lg border shadow-sm p-6 max-h-[70vh] overflow-auto"
   >
     {#if currentStep === 1}
-      <!-- EventIO handles signing internally - no signer CTA needed -->
-
       <StepChooseService
-        tokens={tokens}
         selectedProvider={selectedProvider as any}
         onProviderChange={handleProviderChange as any}
         disabledProviders={nameAvailabilityResults?.conflictProviders || []}
-        relayUrl={graspRelayUrl}
-        onRelayUrlChange={handleRelayUrlChange}
+        relayUrls={graspRelayUrls}
+        onRelayUrlsChange={handleRelayUrlsChange}
         graspServerOptions={graspServerOptions}
       />
     {:else if currentStep === 2}
