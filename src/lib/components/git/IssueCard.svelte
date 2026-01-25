@@ -210,7 +210,7 @@
     });
   }
 
-  const statusIcon = $derived(() => getStatusIcon(status?.kind));
+  const statusIcon = $derived(getStatusIcon(status?.kind));
 
   function getStatusIcon(kind: number | undefined) {
     switch (kind) {
@@ -268,7 +268,7 @@
           actorPubkey={actorPubkey}
           compact={true} />
       {:else if statusIcon}
-        {@const { icon: IconCmp, color } = statusIcon()}
+        {@const { icon: IconCmp, color } = statusIcon}
         <IconCmp class={`h-6 w-6 mt-1 ${color}`} />
       {/if}
       <span class="whitespace-nowrap">Opened <TimeAgo date={createdAt} /></span>

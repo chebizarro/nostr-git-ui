@@ -83,11 +83,15 @@
     return highlightedFiles.includes(filePath);
   };
 
+  // Track files that have already been auto-expanded to prevent infinite re-renders
+  let autoExpandedFiles = new Set<string>();
+
   // Auto-expand highlighted files when commit is expanded
   $effect(() => {
     if (expanded && commitDiff && highlightedFiles.length > 0) {
       for (const file of commitDiff.changes) {
-        if (isFileHighlighted(file.path)) {
+        if (isFileHighlighted(file.path) && !autoExpandedFiles.has(file.path)) {
+          autoExpandedFiles.add(file.path);
           onToggleFileExpansion?.(file.path);
         }
       }
