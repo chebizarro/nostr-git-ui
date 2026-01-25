@@ -852,18 +852,21 @@ export class Repo {
   async #loadCommits() {
     // Validate repoId is not empty string
     if (!this.repoEvent || !this.mainBranch || !this.key || this.key.trim() === "") {
-      console.debug("[Repo] #loadCommits skipped: missing repoEvent, mainBranch, or key", { 
-        hasRepoEvent: !!this.repoEvent, 
-        mainBranch: this.mainBranch, 
-        key: this.key 
+      console.debug("[Repo] #loadCommits skipped: missing repoEvent, mainBranch, or key", {
+        hasRepoEvent: !!this.repoEvent,
+        mainBranch: this.mainBranch,
+        key: this.key
       });
       return;
     }
 
+    // Use selected branch if available, otherwise fall back to mainBranch
+    const branchToLoad = this.selectedBranch || this.mainBranch;
+
     // Delegate to CommitManager
     await this.commitManager.loadCommits(
       this.key,
-      undefined, // branch (will use mainBranch)
+      branchToLoad,
       this.mainBranch
     );
   }
@@ -1133,12 +1136,14 @@ export class Repo {
 
         // 4) Load commits for new branch
         // Reset commits first to ensure fresh load for the new branch
-        this.commitManager.reset();
-        
-        // Directly call loadCommits with the correct branch - no monkey-patching needed
+        this.commitManager.reset(true); // Clear stored branch since we're explicitly switching
+
+        // Set the new branch in CommitManager so subsequent operations (loadMore, loadPage) use it
         const mainBranchName = this.branchManager.getMainBranch();
+        this.commitManager.setCurrentBranch(shortBranch, mainBranchName);
+
         console.log(`[setSelectedBranch] Loading commits for branch: ${shortBranch}, mainBranch: ${mainBranchName}`);
-        
+
         const result = await this.commitManager.loadCommits(
           this.repoId,
           shortBranch,  // The selected branch

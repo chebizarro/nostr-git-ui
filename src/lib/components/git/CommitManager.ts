@@ -62,6 +62,8 @@ export class CommitManager {
   private currentPage: number = 1;
   private commitsPerPage: number;
   private hasMoreCommits: boolean = false;
+  private currentBranch?: string; // The branch currently being used for commits
+  private currentMainBranch?: string; // The main branch for fallback
 
   // Loading state
   private loadingIds: {
@@ -108,6 +110,24 @@ export class CommitManager {
   setRepoKeys(keys: { canonicalKey?: string; workerRepoId?: string }) {
     if (keys.canonicalKey) this.canonicalKey = keys.canonicalKey;
     if (keys.workerRepoId) this.workerRepoId = keys.workerRepoId;
+  }
+
+  /**
+   * Set the current branch for commit loading
+   * This is useful when switching branches to ensure subsequent operations use the correct branch
+   */
+  setCurrentBranch(branch: string, mainBranch?: string): void {
+    this.currentBranch = branch;
+    if (mainBranch) {
+      this.currentMainBranch = mainBranch;
+    }
+  }
+
+  /**
+   * Get the current branch being used for commits
+   */
+  getCurrentBranch(): string | undefined {
+    return this.currentBranch;
   }
 
   /**
@@ -220,20 +240,36 @@ export class CommitManager {
     mainBranch?: string
   ): Promise<CommitLoadResult> {
     const effectiveRepoId = repoId || this.workerRepoId;
-    
+
+    // Use stored values as fallbacks when parameters not provided
+    const effectiveMainBranch = mainBranch || this.currentMainBranch;
+    const effectiveBranch = branch || this.currentBranch || effectiveMainBranch;
+
     // Debug logging to trace the issue
-    console.log("[CommitManager] loadCommits called with:", { 
-      repoId, 
-      workerRepoId: this.workerRepoId, 
-      effectiveRepoId, 
-      branch, 
-      mainBranch 
+    console.log("[CommitManager] loadCommits called with:", {
+      repoId,
+      workerRepoId: this.workerRepoId,
+      effectiveRepoId,
+      branch,
+      effectiveBranch,
+      mainBranch,
+      effectiveMainBranch,
+      storedBranch: this.currentBranch,
+      storedMainBranch: this.currentMainBranch
     });
-    
+
     // Validate repoId is not empty string
-    if (!effectiveRepoId || effectiveRepoId.trim() === "" || !mainBranch) {
-      console.debug("[CommitManager] loadCommits skipped: missing repoId or mainBranch", { effectiveRepoId, mainBranch });
+    if (!effectiveRepoId || effectiveRepoId.trim() === "" || !effectiveMainBranch) {
+      console.debug("[CommitManager] loadCommits skipped: missing repoId or mainBranch", { effectiveRepoId, effectiveMainBranch });
       return { success: false, error: "Repository ID and main branch are required" };
+    }
+
+    // Store the branch info for subsequent calls (loadMoreCommits, loadPage, etc.)
+    if (mainBranch) {
+      this.currentMainBranch = mainBranch;
+    }
+    if (branch) {
+      this.currentBranch = branch;
     }
 
     try {
@@ -247,7 +283,7 @@ export class CommitManager {
       // Try cache first if enabled
       const cacheEnabled = !!(this.config.enableCaching && this.cacheManager && this.canonicalKey);
       // Ensure branchName is a concrete string (short git name)
-      const branchName = (branch ?? mainBranch).split("/").pop()!;
+      const branchName = (effectiveBranch ?? effectiveMainBranch).split("/").pop()!;
       console.log("[CommitManager] branchName resolved to:", branchName, "from branch:", branch, "mainBranch:", mainBranch);
       const pageKey = cacheEnabled
         ? `${this.canonicalKey}:${branchName}:p${this.currentPage}:s${this.commitsPerPage}`
@@ -457,12 +493,19 @@ export class CommitManager {
 
   /**
    * Reset commit state
+   * @param clearBranch If true, also clears the stored branch (default: false to preserve branch across pagination resets)
    */
-  reset(): void {
+  reset(clearBranch: boolean = false): void {
     this.commits = [];
     this.totalCommits = undefined;
     this.currentPage = 1;
     this.hasMoreCommits = false;
+
+    // Optionally clear stored branch (useful when explicitly switching branches)
+    if (clearBranch) {
+      this.currentBranch = undefined;
+      // Note: We keep currentMainBranch as it rarely changes
+    }
 
     // Clear any loading states
     if (this.loadingIds.commits) {
