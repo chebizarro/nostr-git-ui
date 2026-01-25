@@ -947,10 +947,15 @@ export class Repo {
   private syncCommitsState() {
     const newCommits = this.commitManager.getCommits();
     const currentBranch = this.commitManager.getCurrentBranch();
-    console.log(`[Repo.syncCommitsState] Syncing ${newCommits.length} commits, currentBranch=${currentBranch}, selectedBranch=${this.selectedBranch}`);
-    this.#commitsState = newCommits;
+    console.log(`[Repo.syncCommitsState] Syncing ${newCommits.length} commits, currentBranch=${currentBranch}, selectedBranch=${this.selectedBranch}, isSwitching=${this.#branchSwitching}`);
+
+    // IMPORTANT: Create a new array reference to ensure Svelte reactivity triggers
+    // This is critical for Svelte 5's fine-grained reactivity to detect the change
+    this.#commitsState = [...newCommits];
     this.#totalCommitsState = this.commitManager.getTotalCommits();
     this.#hasMoreCommitsState = this.commitManager.getHasMoreCommits();
+
+    console.log(`[Repo.syncCommitsState] Updated #commitsState with ${this.#commitsState.length} commits`);
   }
 
   /**
@@ -1104,75 +1109,74 @@ export class Repo {
     } catch {}
 
     try {
-      if (!isTag) {
-        // Ensure worker is ready
-        if (!this.workerManager?.isReady) {
-          await this.workerManager.initialize();
-        }
-
-        // Gather clone URLs for remote operations
-        const cloneUrls = [...(this.#repo?.clone || [])];
-
-        // Track if we need to clear cache (only if branch content actually changed)
-        let shouldClearCache = false;
-
-        // 1) Ask worker to sync local repo with remote for the selected branch (switch/checkout)
-        if (this.key && cloneUrls.length > 0) {
-          try {
-            this.syncStatus = await this.workerManager.syncWithRemote({
-              repoId: this.key,
-              cloneUrls,
-              branch: shortBranch,
-            });
-            
-            // Only clear cache if remote had updates or if sync reports it needs update
-            if (this.syncStatus?.needsUpdate) {
-              console.log("Branch content changed, will clear cache");
-              shouldClearCache = true;
-            } else {
-              console.log("Branch already up-to-date, preserving cache for instant load");
-            }
-          } catch (syncErr) {
-            console.warn("syncWithRemote failed, will try ensureFullClone:", syncErr);
-            // If sync fails, play it safe and clear cache
-            shouldClearCache = true;
-          }
-        }
-
-        // 2) Ensure the branch is fully available locally (deep clone as needed)
-        if (this.key) {
-          await this.workerManager.ensureFullClone({ repoId: this.key, branch: shortBranch });
-        }
-
-        // 3) Clear caches only if branch content actually changed
-        if (shouldClearCache) {
-          console.log("Clearing file cache due to branch update");
-          try { await this.fileManager.clearCache(this.key); } catch {}
-        } else {
-          console.log("Preserving file cache - branch unchanged");
-        }
-
-        // 4) Load commits for new branch
-        // Reset commits first to ensure fresh load for the new branch
-        this.commitManager.reset(true); // Clear stored branch since we're explicitly switching
-
-        // Set the new branch in CommitManager so subsequent operations (loadMore, loadPage) use it
-        const mainBranchName = this.branchManager.getMainBranch();
-        this.commitManager.setCurrentBranch(shortBranch, mainBranchName);
-
-        console.log(`[setSelectedBranch] Loading commits for branch: ${shortBranch}, mainBranch: ${mainBranchName}`);
-
-        const result = await this.commitManager.loadCommits(
-          this.repoId,
-          shortBranch,  // The selected branch
-          mainBranchName
-        );
-        console.log(`[setSelectedBranch] Commits loaded:`, result.success, `count:`, this.commitManager.getCommits().length);
-        this.syncCommitsState(); // Sync reactive state after branch switch
-        
-        // Note: We rely on CommitManager's built-in caching (IndexedDB)
-        // which is per-branch, so switching back to a recent branch is instant
+      // Ensure worker is ready
+      if (!this.workerManager?.isReady) {
+        await this.workerManager.initialize();
       }
+
+      // Gather clone URLs for remote operations
+      const cloneUrls = [...(this.#repo?.clone || [])];
+
+      // Track if we need to clear cache (only if branch content actually changed)
+      let shouldClearCache = false;
+
+      // 1) Ask worker to sync local repo with remote for the selected branch/tag
+      if (this.key && cloneUrls.length > 0) {
+        try {
+          this.syncStatus = await this.workerManager.syncWithRemote({
+            repoId: this.key,
+            cloneUrls,
+            branch: shortBranch,
+          });
+
+          // Only clear cache if remote had updates or if sync reports it needs update
+          if (this.syncStatus?.needsUpdate) {
+            console.log("Branch content changed, will clear cache");
+            shouldClearCache = true;
+          } else {
+            console.log("Branch already up-to-date, preserving cache for instant load");
+          }
+        } catch (syncErr) {
+          console.warn("syncWithRemote failed, will try ensureFullClone:", syncErr);
+          // If sync fails, play it safe and clear cache
+          shouldClearCache = true;
+        }
+      }
+
+      // 2) Ensure the branch is fully available locally (deep clone as needed)
+      if (this.key) {
+        await this.workerManager.ensureFullClone({ repoId: this.key, branch: shortBranch });
+      }
+
+      // 3) Clear caches only if branch content actually changed
+      if (shouldClearCache) {
+        console.log("Clearing file cache due to branch update");
+        try { await this.fileManager.clearCache(this.key); } catch {}
+      } else {
+        console.log("Preserving file cache - branch unchanged");
+      }
+
+      // 4) Load commits for new branch/tag
+      // Reset commits first to ensure fresh load for the new branch
+      this.commitManager.reset(true); // Clear stored branch since we're explicitly switching
+
+      // Set the new branch in CommitManager so subsequent operations (loadMore, loadPage) use it
+      const mainBranchName = this.branchManager.getMainBranch();
+      this.commitManager.setCurrentBranch(shortBranch, mainBranchName);
+
+      console.log(`[setSelectedBranch] Loading commits for ref: ${shortBranch} (isTag: ${isTag}), mainBranch: ${mainBranchName}`);
+
+      const result = await this.commitManager.loadCommits(
+        this.repoId,
+        shortBranch,  // The selected branch or tag
+        mainBranchName
+      );
+      console.log(`[setSelectedBranch] Commits loaded:`, result.success, `count:`, this.commitManager.getCommits().length);
+      // Note: syncCommitsState is called AFTER branchSwitching is cleared (in finally block)
+      // to ensure UI components can properly pick up the new commits
+
+      // Note: We rely on CommitManager's built-in caching (IndexedDB)
+      // which is per-branch, so switching back to a recent branch is instant
 
       // Invalidate cached resolved default branch so future calls re-resolve against new selection
       this.invalidateBranchCache();
@@ -1198,8 +1202,13 @@ export class Repo {
         theme: "error"
       });
     } finally {
-      // Clear switching flag
+      // Clear switching flag FIRST, then sync commits
+      // This ensures UI components see isSwitching=false when they receive the new commits
       this.#branchSwitching = false;
+
+      // Now sync commits state - UI effects will see isSwitching=false and can update
+      this.syncCommitsState();
+
       // Increment trigger to signal branch switch completed - components can react to this
       this.#branchChangeTrigger++;
     }

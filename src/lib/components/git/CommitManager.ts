@@ -299,10 +299,16 @@ export class CommitManager {
         repoKey: string;
       };
       if (cacheEnabled && pageKey) {
+        console.log(`[CommitManager] Checking cache for key: ${pageKey}`);
         const cached = await this.cacheManager!.get<CommitPageCacheEntry>(
           this.COMMIT_CACHE_NAME,
           pageKey
         );
+        if (cached) {
+          console.log(`[CommitManager] Cache hit for ${pageKey}: repoKey=${cached.repoKey}, branch=${cached.branch}, commits=${cached.commits?.length}`);
+        } else {
+          console.log(`[CommitManager] Cache miss for ${pageKey}`);
+        }
         if (cached && cached.repoKey === this.canonicalKey && cached.branch === branchName) {
           // Apply cached state
           this.commits = cached.commits;
@@ -311,6 +317,7 @@ export class CommitManager {
             ? this.currentPage * this.commitsPerPage < cached.total
             : cached.commits.length === this.commitsPerPage; // heuristic if no total
 
+          console.log(`[CommitManager] Using cached commits: ${this.commits.length} for branch ${branchName}`);
           if (this.loadingIds.commits) {
             context.remove(this.loadingIds.commits);
             this.loadingIds.commits = null;
@@ -364,7 +371,12 @@ export class CommitManager {
         branch: branchName as string,
         depth: requiredDepth as number,
       });
-      console.log(`[CommitManager] Worker returned ${commitsResult.commits?.length || 0} commits, success=${commitsResult.success}`);
+      console.log(`[CommitManager] Worker returned ${commitsResult.commits?.length || 0} commits, success=${commitsResult.success}, fallbackUsed=${commitsResult.fallbackUsed || 'none'}`);
+
+      // Warn if worker used a fallback branch - this could explain "wrong commits" issues
+      if (commitsResult.fallbackUsed && commitsResult.fallbackUsed !== branchName) {
+        console.warn(`[CommitManager] WARNING: Worker used fallback branch '${commitsResult.fallbackUsed}' instead of requested '${branchName}'`);
+      }
 
       if (commitsResult.success) {
         const allCommits = commitsResult.commits || [];
@@ -376,6 +388,7 @@ export class CommitManager {
 
         // If it's the first page, replace the commits, otherwise append
         this.commits = this.currentPage === 1 ? pageCommits : [...this.commits, ...pageCommits];
+        console.log(`[CommitManager] Stored ${this.commits.length} commits (page ${this.currentPage}, branch: ${this.currentBranch})`);
 
         this.hasMoreCommits = endIndex < allCommits.length;
 

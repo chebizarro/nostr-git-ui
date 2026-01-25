@@ -20,10 +20,13 @@
   function handleChange(e: Event) {
     const target = e.target as HTMLSelectElement;
     const branchName = target.value;
-    console.log("[BranchSelector] handleChange called with:", branchName, "isSwitching:", isSwitching);
-    if (branchName && !isSwitching) {
+    const currentSelected = repo.selectedBranch;
+    console.log("[BranchSelector] handleChange called with:", branchName, "current:", currentSelected, "isSwitching:", isSwitching);
+    if (branchName && !isSwitching && branchName !== currentSelected) {
       console.log("[BranchSelector] Calling setSelectedBranch with:", branchName);
       repo.setSelectedBranch(branchName);
+    } else if (branchName === currentSelected) {
+      console.log("[BranchSelector] Branch already selected, skipping:", branchName);
     }
   }
 </script>
