@@ -270,7 +270,11 @@ export function useForkRepo(options: UseForkRepoOptions = {}) {
       progress.push(progressItem);
     }
 
-    onProgress?.(progress);
+    // Force reactivity by reassigning the array with a snapshot
+    // This ensures $derived computations in consumers (like ForkRepoDialog) re-run
+    progress = $state.snapshot(progress) as ForkProgress[];
+
+    onProgress?.($state.snapshot(progress) as ForkProgress[]);
   }
 
   /**
@@ -479,9 +483,17 @@ export function useForkRepo(options: UseForkRepoOptions = {}) {
       // Step 5: Publish events (if handler provided)
       if (onPublishEvent) {
         updateProgress("publish", "Publishing to Nostr relays...", "running");
-        await onPublishEvent(announcementEvent);
-        await onPublishEvent(stateEvent);
-        updateProgress("publish", "Successfully published to Nostr relays", "completed");
+        try {
+          await onPublishEvent(announcementEvent);
+          console.log("✅ Published repo announcement event");
+          await onPublishEvent(stateEvent);
+          console.log("✅ Published repo state event");
+          updateProgress("publish", "Successfully published to Nostr relays", "completed");
+        } catch (publishError) {
+          console.error("❌ Failed to publish Nostr events:", publishError);
+          // Re-throw to be caught by outer catch block
+          throw new Error(`Failed to publish Nostr events: ${publishError instanceof Error ? publishError.message : String(publishError)}`);
+        }
       }
 
       const result: ForkResult = {
