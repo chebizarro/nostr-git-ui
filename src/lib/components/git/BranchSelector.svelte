@@ -10,10 +10,19 @@
   const selectedBranch = $derived(repo.selectedBranch || repo.mainBranch || "");
   const isSwitching = $derived(repo.isBranchSwitching);
 
+  // Debug logging
+  $effect(() => {
+    console.log("[BranchSelector] refs:", refs.length, "branches:", branches.length, "tags:", tags.length);
+    console.log("[BranchSelector] selectedBranch:", selectedBranch, "mainBranch:", repo.mainBranch);
+    console.log("[BranchSelector] isSwitching:", isSwitching);
+  });
+
   function handleChange(e: Event) {
     const target = e.target as HTMLSelectElement;
     const branchName = target.value;
+    console.log("[BranchSelector] handleChange called with:", branchName, "isSwitching:", isSwitching);
     if (branchName && !isSwitching) {
+      console.log("[BranchSelector] Calling setSelectedBranch with:", branchName);
       repo.setSelectedBranch(branchName);
     }
   }
