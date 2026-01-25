@@ -583,14 +583,15 @@ export function useNewRepo(options: UseNewRepoOptions = {}) {
           earliestUniqueCommit: localRepo?.initialCommit || undefined,
         });
         // Create state event
-        // Build full ref names per ngit (refs/heads/<branch>) for HEAD and refs
+        // Build ref names for NIP-34 state event
+        // The createRepoStateEvent function adds "refs/{type}/" prefix, so we only pass the branch name
         const headRef = config.defaultBranch ? `refs/heads/${config.defaultBranch}` : undefined;
         const refs =
-          localRepo?.initialCommit && headRef
+          localRepo?.initialCommit && config.defaultBranch
             ? [
                 {
                   type: "heads" as const,
-                  name: headRef,
+                  name: config.defaultBranch, // Just the branch name, createRepoStateEvent adds refs/heads/
                   commit: localRepo.initialCommit,
                 },
               ]
