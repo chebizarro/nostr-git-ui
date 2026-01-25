@@ -9,7 +9,25 @@
   import { useRegistry } from "../../useRegistry";
   const { Card, CardHeader, CardTitle, CardContent, ScrollArea, Badge } = useRegistry();
 
-  const { patches, selectedPatch, onPatchSelect } = $props();
+  interface Patch {
+    id: string;
+    status: string;
+    name: string;
+    description: string;
+    linesAdded: number;
+    linesRemoved: number;
+    filesChanged: number;
+    createdAt: string;
+    author: string;
+  }
+
+  interface Props {
+    patches: Patch[];
+    selectedPatch?: { id: string } | null;
+    onPatchSelect: (patch: Patch) => void;
+  }
+
+  const { patches, selectedPatch, onPatchSelect }: Props = $props();
 
   const getStatusColor = (status: string) => {
     switch (status) {

@@ -270,7 +270,7 @@
                   </Badge>
                 {/if}
                 <span class="text-xs text-muted-foreground whitespace-nowrap">
-                  +{Math.floor(Math.random() * 50)} -{Math.floor(Math.random() * 30)}
+                  -- lines
                 </span>
               </div>
             </div>
