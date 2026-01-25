@@ -81,6 +81,8 @@ export class Repo {
   #selectedBranchState: string | undefined = $state(undefined);
   #branchSwitching: boolean = $state(false);
   #refsLoading: boolean = $state(false);
+  // Counter that increments when branch switch completes - components can track this
+  #branchChangeTrigger: number = $state(0);
   // Reactive commits state so UI can respond to branch changes
   #commitsState: any[] = $state([]);
   #totalCommitsState: number | undefined = $state(undefined);
@@ -1048,6 +1050,14 @@ export class Repo {
     return this.#branchSwitching;
   }
 
+  /**
+   * Counter that increments when a branch switch completes.
+   * Components can track this to know when to reload data for the new branch.
+   */
+  get branchChangeTrigger() {
+    return this.#branchChangeTrigger;
+  }
+
   async setSelectedBranch(branchName: string) {    
     // Set switching flag to prevent premature loads
     this.#branchSwitching = true;
@@ -1167,6 +1177,8 @@ export class Repo {
     } finally {
       // Clear switching flag
       this.#branchSwitching = false;
+      // Increment trigger to signal branch switch completed - components can react to this
+      this.#branchChangeTrigger++;
     }
   }
 
