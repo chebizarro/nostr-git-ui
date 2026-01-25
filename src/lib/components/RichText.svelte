@@ -81,7 +81,7 @@
     );
   }
 
-  const processed = $derived(() => {
+  const processed = $derived.by(() => {
     if (!linkTemplate) return content || "";
     // Replace NIP-19 codes with URL text; rely on markdown-it linkify to make them clickable
     let out = content || "";
@@ -95,5 +95,5 @@
   </script>
 
 <div class={prose ? "prose prose-sm dark:prose-invert max-w-none" : ""}>
-  {@html md.render(processed())}
+  {@html md.render(processed)}
 </div>

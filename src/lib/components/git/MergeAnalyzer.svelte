@@ -48,7 +48,7 @@
   }
 
   // Normalize diff input for DiffViewer
-  const normalizedDiff = $derived(() => (Array.isArray(patch) ? patch : (patch?.diff ?? [])));
+  const normalizedDiff = $derived(Array.isArray(patch) ? patch : (patch?.diff ?? []));
 </script>
 
 <div class="space-y-6">
@@ -300,7 +300,7 @@
             </div>
           </div>
         </div>
-      {:else if normalizedDiff().length === 0}
+      {:else if normalizedDiff.length === 0}
         <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:bg-blue-950/20">
           <div class="flex items-start gap-3">
             <Info class="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
@@ -317,7 +317,7 @@
             <div class="flex items-center justify-between">
               <span class="text-sm font-medium">Change Summary</span>
               <span class="text-xs text-muted-foreground">
-                {normalizedDiff().length} file{normalizedDiff().length > 1 ? 's' : ''} modified
+                {normalizedDiff.length} file{normalizedDiff.length > 1 ? 's' : ''} modified
               </span>
             </div>
             {#if analysis.conflictCount > 0}
@@ -335,7 +335,7 @@
           
           <!-- Diff Viewer -->
           <div class="border rounded-lg overflow-hidden">
-            <DiffViewer diff={normalizedDiff()} showLineNumbers={true} />
+            <DiffViewer diff={normalizedDiff} showLineNumbers={true} />
           </div>
         </div>
       {/if}

@@ -40,7 +40,7 @@
     slotSide,
   }: Props = $props();
 
-  const accentClass = $derived(() => {
+  const accentClass = $derived.by(() => {
     switch (accent) {
       case "blue":
         return "accent-blue-500";

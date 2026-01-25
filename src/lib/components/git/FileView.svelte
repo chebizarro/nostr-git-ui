@@ -301,42 +301,6 @@
       }
     };
 
-    // Get line numbers from browser's text selection
-    const getLinesFromSelection = (): { start: number; end: number } | null => {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return null;
-      const range = sel.getRangeAt(0);
-      if (range.collapsed) return null;
-      
-      // startContainer/endContainer can be text nodes, so we need to get their parent element
-      const getLineElement = (node: Node): HTMLElement | null => {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          return (node as HTMLElement).closest('.cm-line');
-        } else if (node.parentElement) {
-          return node.parentElement.closest('.cm-line');
-        }
-        return null;
-      };
-      
-      const startLine = getLineElement(range.startContainer);
-      const endLine = getLineElement(range.endContainer);
-      
-      if (!startLine || !endLine) return null;
-      
-      // Get all lines in the editor
-      const allLines = Array.from(editorHost!.querySelectorAll('.cm-line')) as HTMLElement[];
-      const startIdx = allLines.indexOf(startLine);
-      const endIdx = allLines.indexOf(endLine);
-      
-      if (startIdx === -1 || endIdx === -1) return null;
-      
-      // Convert to 1-based line numbers
-      return {
-        start: Math.min(startIdx, endIdx) + 1,
-        end: Math.max(startIdx, endIdx) + 1
-      };
-    };
-
     const handleMouseDown = (e: MouseEvent) => {
       const el = e.target as HTMLElement;
       const gutterEl = el?.closest?.('.cm-gutterElement') as HTMLElement | null;

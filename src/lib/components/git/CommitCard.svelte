@@ -95,10 +95,10 @@
   }
 
   // Build href fallback
-  const computedHref = $derived(() => href || undefined);
+  const computedHref = $derived(href || undefined);
 </script>
 
-<BaseItemCard clickable={true} href={computedHref()} variant="commit">
+<BaseItemCard clickable={true} href={computedHref} variant="commit">
   <!-- title -->
   {#snippet slotTitle()}
     {commit.commit.message}

@@ -1,17 +1,16 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
   import { formatDistanceToNow } from "date-fns";
   const { date, addSuffix = true } = $props();
   let formatted = $state("");
-  let interval: ReturnType<typeof setInterval>;
 
-  function update() {
-    formatted = formatDistanceToNow(new Date(date), { addSuffix });
-  }
-
-  update();
-  interval = setInterval(update, 60_000);
-  onDestroy(() => clearInterval(interval));
+  $effect(() => {
+    const currentDate = date;
+    formatted = formatDistanceToNow(new Date(currentDate), { addSuffix });
+    const interval = setInterval(() => {
+      formatted = formatDistanceToNow(new Date(currentDate), { addSuffix });
+    }, 60_000);
+    return () => clearInterval(interval);
+  });
 </script>
 
 <span>{formatted}</span>
