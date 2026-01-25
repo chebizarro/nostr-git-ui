@@ -220,11 +220,13 @@ export class Repo {
     }
 
     // Keep worker auth config synced with token store updates
-    tokens.subscribe(async (t) => {
+    // Single consolidated subscription for tokens - handles both local state and WorkerManager auth
+    tokens.subscribe(async (tokenList) => {
+      this.tokens = tokenList;
       try {
-        await this.workerManager.setAuthConfig({ tokens: t });
-        if (t?.length) {
-          console.log("🔐 Updated git auth tokens for", t.length, "hosts");
+        await this.workerManager.setAuthConfig({ tokens: tokenList });
+        if (tokenList?.length) {
+          console.log("🔐 Updated git auth tokens for", tokenList.length, "hosts");
         } else {
           console.log("🔐 Cleared git auth tokens");
         }
@@ -430,16 +432,7 @@ export class Repo {
       this.#patchDagCache = undefined;
     });
 
-    tokens.subscribe(async (tokenList) => {
-      this.tokens = tokenList;
-      console.log("🔐 Token store updated in Repo:", tokenList.length, "tokens");
-
-      // Update WorkerManager authentication if it's ready
-      if (this.workerManager.isReady) {
-        await this.workerManager.setAuthConfig({ tokens: tokenList });
-        console.log("Updated WorkerManager authentication with", tokenList.length, "tokens");
-      }
-    });
+    // Note: Token subscription consolidated above in constructor
 
     // Smart initialization - refs are loaded from subscription handlers
     // Worker initialization happens in background, refs fallback runs after worker is ready
@@ -508,19 +501,7 @@ export class Repo {
     issues.subscribe((issueEvents) => {
       this.issues = issueEvents;
     });
-    tokens.subscribe(async (tokens) => {
-      this.tokens = tokens;
-
-      // Update authentication configuration when tokens change
-      if (this.workerManager.isReady && tokens.length > 0) {
-        try {
-          await this.workerManager.setAuthConfig({ tokens });
-          console.log("Updated git authentication for", tokens.length, "hosts");
-        } catch (error) {
-          console.error("Failed to update git authentication:", error);
-        }
-      }
-    });
+    // Note: Token subscription consolidated at the top of constructor
   }
 
   /**

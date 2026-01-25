@@ -76,7 +76,7 @@
           ? "This patch can be fast-forward merged without conflicts."
           : "This patch can be merged cleanly without conflicts.";
       case "conflicts":
-        return `This patch has merge conflicts in ${result.conflictFiles.length} file(s) that need to be resolved.`;
+        return `This patch has merge conflicts in ${result.conflictFiles?.length ?? 0} file(s) that need to be resolved.`;
       case "up-to-date":
         return "This patch has already been applied to the target branch.";
       case "diverged":
