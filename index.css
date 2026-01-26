@@ -930,6 +930,10 @@ body {
   margin-top: 2rem;
 }
 
+.ml-7 {
+  margin-left: 1.75rem;
+}
+
 .box-border {
   box-sizing: border-box;
 }
@@ -2304,6 +2308,10 @@ body {
   background-color: rgb(113 63 18 / 0.5);
 }
 
+.bg-green-900\/50 {
+  background-color: rgb(20 83 45 / 0.5);
+}
+
 .bg-opacity-50 {
   --tw-bg-opacity: 0.5;
 }
@@ -3032,6 +3040,11 @@ body {
   color: rgb(133 77 14 / var(--tw-text-opacity, 1));
 }
 
+.text-green-300 {
+  --tw-text-opacity: 1;
+  color: rgb(134 239 172 / var(--tw-text-opacity, 1));
+}
+
 .underline {
   text-decoration-line: underline;
 }
@@ -3497,6 +3510,11 @@ body {
 
 .hover\:bg-secondary\/80:hover {
   background-color: hsl(var(--secondary) / 0.8);
+}
+
+.hover\:bg-gray-600:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(75 85 99 / var(--tw-bg-opacity, 1));
 }
 
 .hover\:text-accent:hover {

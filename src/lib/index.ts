@@ -11,6 +11,7 @@ export * from "./utils/signer-context";
 export { useFunctions, useFunction } from "./useFunctions";
 export type { FunctionRegistry } from "./internal/function-registry";
 export * from "./Template";
+export { useImportRepo, type ImportProgress, type ImportResult } from "./hooks/useImportRepo.svelte";
 export { toast } from "./stores/toast";
 export { loadTokensFromStorage, saveTokensToStorage, type TokenEntry } from "./utils/tokenLoader";
 export { tryTokensForHost, getTokensForHost } from "./utils/tokenHelpers";

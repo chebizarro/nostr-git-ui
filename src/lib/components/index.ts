@@ -27,6 +27,7 @@ export { default as EditRepoPanel } from "./git/EditRepoPanel.svelte";
 export { default as RepoPicker } from "./git/RepoPicker.svelte";
 export { default as StackedDiff } from "./git/StackedDiff.svelte";
 export { default as ForkRepoDialog } from "./git/ForkRepoDialog.svelte";
+export { default as ImportRepoDialog } from "./git/ImportRepoDialog.svelte";
 export { Repo } from "./git/Repo.svelte";
 export { WorkerManager } from "./git/WorkerManager";
 export {
