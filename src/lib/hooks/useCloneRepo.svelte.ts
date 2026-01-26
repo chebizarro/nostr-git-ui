@@ -121,7 +121,7 @@ export function useCloneRepo(options: CloneRepoOptions): CloneRepoHook {
       onProgress?.("Clone completed, creating repository announcement...", 95);
 
       // Create and emit NIP-34 repository state event
-      await createAndEmitRepoStateEvent(url, sanitizedPath);
+      await createAndEmitRepoStateEvent(url, sanitizedPath, api);
 
       onProgress?.("Repository cloned successfully!", 100);
     } catch (err) {
@@ -137,7 +137,7 @@ export function useCloneRepo(options: CloneRepoOptions): CloneRepoHook {
   /**
    * Create and emit a NIP-34 repository state event after successful clone
    */
-  async function createAndEmitRepoStateEvent(repoUrl: string, localPath: string): Promise<void> {
+  async function createAndEmitRepoStateEvent(repoUrl: string, localPath: string, workerApi: any): Promise<void> {
     try {
       // Extract repository information from URL
       const url = new URL(repoUrl);
@@ -151,16 +151,24 @@ export function useCloneRepo(options: CloneRepoOptions): CloneRepoHook {
       const repoName = pathParts[pathParts.length - 1].replace(/\.git$/, "");
       const repoSlug = `${owner}/${repoName}`;
 
-      // Use a default branch for the repository state event
-      let defaultBranch = "main";
+      // Get the actual default branch from the cloned repository
+      let defaultBranch: string | undefined;
 
       try {
-        // Try to get the actual default branch from the cloned repository
-        // This is a simplified approach - in a real implementation you might
-        // want to query the remote HEAD or use git symbolic-ref
-        defaultBranch = "main"; // Fallback to main
+        // Query the worker for the repository's branches to determine the default
+        const branches = await workerApi.listBranches({ repoId: repoSlug });
+        if (branches && branches.length > 0) {
+          // Use the first branch (usually the default/HEAD branch)
+          defaultBranch = branches[0];
+        }
       } catch (error) {
-        console.warn("Could not determine default branch, using main:", error);
+        console.warn("Could not determine default branch from repo:", error);
+      }
+
+      // If we couldn't determine the branch, we can't create a valid repo state event
+      if (!defaultBranch) {
+        console.warn("Could not determine default branch - skipping repo state event creation");
+        return;
       }
 
       // Create NIP-34 repository state event using proper types
