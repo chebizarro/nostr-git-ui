@@ -191,10 +191,10 @@
     // If the user hasn't manually edited clone URLs, fully regenerate the list based on current inputs
     if (!userEditedCloneUrl) {
       const host = availabilityHost || providerHost(selectedProvider);
-      const nostrUrl = `nostr://${buildRepoKey(userPubkey, name)}`;
+      const nostrUrl = userPubkey ? `nostr://${buildRepoKey(userPubkey, name)}` : undefined;
 
       if (selectedProvider === "grasp") {
-        advancedSettings.cloneUrls = [nostrUrl];
+        advancedSettings.cloneUrls = nostrUrl ? [nostrUrl] : [];
       } else {
         // For non-GRASP: prefer HTTPS primary (when derivable), plus nostr secondary
         const httpsUrl = host && username

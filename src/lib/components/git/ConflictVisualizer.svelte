@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { AlertTriangle, FileText, ChevronDown, ChevronRight, Zap, Target } from "@lucide/svelte";
+  import { TriangleAlert, FileText, ChevronDown, ChevronRight, Zap, Target } from "@lucide/svelte";
   import { useRegistry } from "../../useRegistry";
   import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../../components";
   const { Card, CardContent, CardHeader, CardTitle, Badge, Button } = useRegistry();
@@ -57,41 +57,8 @@
       case "structure":
         return { icon: Zap, color: "text-blue-500" };
       default:
-        return { icon: AlertTriangle, color: "text-gray-500" };
+        return { icon: TriangleAlert, color: "text-gray-500" };
     }
-  };
-
-  const mockConflictContent = {
-    "src/components/App.tsx": `<<<<<<< HEAD (Current)
-const [theme, setTheme] = useState('dark');
-const [sidebar, setSidebar] = useState(true);
-=======
-const [theme, setTheme] = useState('light');
-const [colorScheme, setColorScheme] = useState('blue');
-const [sidebarVisible, setSidebarVisible] = useState(false);
->>>>>>> Patch: Fix responsive layout`,
-    "src/styles/main.css": `<<<<<<< HEAD (Current)
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-=======
-.container {
-  max-width: 100%;
-  margin: 0 auto;
-  padding: 0 1rem;
-}
->>>>>>> Patch: Fix responsive layout`,
-    "src/auth/login.tsx": `<<<<<<< HEAD (Current)
-export const LoginForm = () => {
-  return <form>...</form>;
-};
-=======
-export const LoginForm: React.FC = () => {
-  const [loading, setLoading] = useState(false);
-  return <form>...</form>;
-};
->>>>>>> Patch: Fix responsive layout`,
   };
 
   interface Conflict {
@@ -99,6 +66,7 @@ export const LoginForm: React.FC = () => {
     lines: string;
     type: "content" | "formatting" | "structure";
     severity: "low" | "medium" | "high";
+    content?: string;
   }
 </script>
 
@@ -121,7 +89,7 @@ export const LoginForm: React.FC = () => {
     <Card class="border-orange-200 bg-orange-50">
       <CardHeader class="pb-3">
         <CardTitle class="text-lg flex items-center gap-2 text-orange-800">
-          <AlertTriangle class="h-5 w-5" />
+          <TriangleAlert class="h-5 w-5" />
           Conflict Summary
         </CardTitle>
       </CardHeader>
@@ -129,19 +97,19 @@ export const LoginForm: React.FC = () => {
         <div class="grid grid-cols-3 gap-4">
           <div class="text-center">
             <div class="text-2xl font-bold text-red-600">
-              {conflicts.filter((c) => c.severity === "high").length}
+              {conflicts.filter((c: Conflict) => c.severity === "high").length}
             </div>
             <div class="text-xs text-muted-foreground">High Risk</div>
           </div>
           <div class="text-center">
             <div class="text-2xl font-bold text-orange-600">
-              {conflicts.filter((c) => c.severity === "medium").length}
+              {conflicts.filter((c: Conflict) => c.severity === "medium").length}
             </div>
             <div class="text-xs text-muted-foreground">Medium Risk</div>
           </div>
           <div class="text-center">
             <div class="text-2xl font-bold text-yellow-600">
-              {conflicts.filter((c) => c.severity === "low").length}
+              {conflicts.filter((c: Conflict) => c.severity === "low").length}
             </div>
             <div class="text-xs text-muted-foreground">Low Risk</div>
           </div>
@@ -188,10 +156,7 @@ export const LoginForm: React.FC = () => {
               <CardContent class="pt-0">
                 <div class="bg-background rounded border p-3">
                   <div class="text-xs text-muted-foreground mb-2">Conflict preview:</div>
-                  <pre class="text-xs font-mono whitespace-pre-wrap overflow-x-auto">
-                    {mockConflictContent[conflict.file as keyof typeof mockConflictContent] ||
-                      "Conflict content preview not available"}
-                  </pre>
+                  <pre class="text-xs font-mono whitespace-pre-wrap overflow-x-auto">{conflict.content || "Conflict content not available. Use the diff viewer to see full details."}</pre>
                 </div>
 
                 <div class="flex gap-2 mt-3">

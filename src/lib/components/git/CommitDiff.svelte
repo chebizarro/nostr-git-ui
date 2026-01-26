@@ -147,7 +147,7 @@
               <div class="flex items-center gap-1.5">
                 <Calendar class="h-4 w-4" />
                 <span
-                  >{formatDistanceToNow(new Date(commitDiff.meta.date), { addSuffix: true })}</span
+                  >{commitDiff.meta.date ? formatDistanceToNow(new Date(commitDiff.meta.date), { addSuffix: true }) : 'Unknown date'}</span
                 >
               </div>
               <div class="font-mono text-xs bg-muted px-2 py-1 rounded">

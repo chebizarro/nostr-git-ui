@@ -248,8 +248,8 @@
     const results = availableCommits
       .filter(c => {
         const oid = c.oid || '';
-        const message = c.message || c.commit?.message || '';
-        const author = c.author || c.commit?.author?.name || '';
+        const message = c.message || '';
+        const author = c.author || '';
         return oid.toLowerCase().includes(query) ||
                message.toLowerCase().includes(query) ||
                author.toLowerCase().includes(query);
@@ -1034,9 +1034,9 @@
                       <GitCommit class="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
                       <div class="flex-1 min-w-0">
                         <div class="text-xs font-mono text-blue-400">{commit.oid?.slice(0, 7) || 'unknown'}</div>
-                        <div class="text-sm text-white truncate">{commit.message?.split('\n')[0] || commit.commit?.message?.split('\n')[0] || 'No message'}</div>
+                        <div class="text-sm text-white truncate">{commit.message?.split('\n')[0] || 'No message'}</div>
                         <div class="text-xs text-gray-400 mt-0.5">
-                          {commit.author || commit.commit?.author?.name || 'Unknown'} · {new Date((commit.timestamp || commit.commit?.author?.timestamp || 0) * 1000).toLocaleDateString()}
+                          {commit.author || 'Unknown'} · {new Date((commit.timestamp || 0) * 1000).toLocaleDateString()}
                         </div>
                       </div>
                     </div>
