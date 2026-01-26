@@ -31,7 +31,7 @@
   import { AllTokensFailedError, TokenNotFoundError } from "../../utils/tokenErrors.js";
   import { toast } from "../../stores/toast";
   import type { Token } from "../../stores/tokens.js";
-  import type { EventIO, NostrEvent } from "@nostr-git/shared-types";
+  import type { EventIO, NostrEvent } from "@nostr-git/core";
   import type { ImportConfig } from "@nostr-git/core";
 
   interface Props {

@@ -1,10 +1,3 @@
- export { default as BranchSelector } from "./git/BranchSelector.svelte";
-diff --git a/packages/ui/src/lib/hooks/useImportRepo.svelte.ts b/packages/ui/src/lib/hooks/useImportRepo.svelte.ts
-new file mode 100644
-index 0000000..a2de32d
---- /dev/null
-++ b/packages/ui/src/lib/hooks/useImportRepo.svelte.ts
-@@ -0,0 +1,1288 @@
 /**
  * Repository Import Hook
  *
@@ -43,7 +36,7 @@ import type {
   RepoStateEvent,
   NostrEvent,
   EventIO,
-} from "@nostr-git/shared-types";
+} from "@nostr-git/core";
 import type {
   GitIssue as Issue,
   GitComment as Comment,
@@ -411,6 +404,9 @@ async function validateTokenAndOwnership(
  */
 async function ensureForkedRepo(context: ImportContext, isOwner: boolean): Promise<RepoMetadata> {
   if (isOwner) {
+    if (!context.finalRepo) {
+      throw new Error("Repository metadata is missing");
+    }
     return context.finalRepo;
   }
 
@@ -1184,9 +1180,18 @@ export function useImportRepo(options: UseImportRepoOptions) {
 
       // Validation & Repository Setup
       const { repo: ownershipRepo, isOwner } = await validateTokenAndOwnership(context);
+      
+      if (!ownershipRepo) {
+        throw new Error("Failed to fetch repository information");
+      }
+      
       context.finalRepo = ownershipRepo;
       context.finalRepo = await ensureForkedRepo(context, isOwner);
       context.finalRepo = await fetchRepoMetadata(context, ownershipRepo);
+
+      if (!context.finalRepo) {
+        throw new Error("Failed to fetch repository metadata");
+      }
 
       // Initialize repo address and timestamps
       const repoName = context.finalRepo.fullName.split("/").pop() || context.finalRepo.name;
@@ -1230,6 +1235,11 @@ export function useImportRepo(options: UseImportRepoOptions) {
       updateProgress("Import completed successfully!");
       if (progress) {
         progress.isComplete = true;
+      }
+
+      // Final validation before returning result
+      if (!context.finalRepo) {
+        throw new Error("Repository metadata was lost during import");
       }
 
       const result: ImportResult = {
@@ -1286,3 +1296,10 @@ export function useImportRepo(options: UseImportRepoOptions) {
       return isImporting;
     },
     get progress() {
+      return progress;
+    },
+    get error() {
+      return error;
+    },
+  };
+}
