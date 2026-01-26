@@ -9,6 +9,51 @@
     FileIcon,
   } from "@lucide/svelte";
   import type { FileDiff } from "@nostr-git/core/types";
+  import hljs from "highlight.js/lib/core";
+  // Import common languages for syntax highlighting
+  import javascript from "highlight.js/lib/languages/javascript";
+  import typescript from "highlight.js/lib/languages/typescript";
+  import python from "highlight.js/lib/languages/python";
+  import rust from "highlight.js/lib/languages/rust";
+  import go from "highlight.js/lib/languages/go";
+  import java from "highlight.js/lib/languages/java";
+  import cpp from "highlight.js/lib/languages/cpp";
+  import c from "highlight.js/lib/languages/c";
+  import csharp from "highlight.js/lib/languages/csharp";
+  import ruby from "highlight.js/lib/languages/ruby";
+  import php from "highlight.js/lib/languages/php";
+  import css from "highlight.js/lib/languages/css";
+  import scss from "highlight.js/lib/languages/scss";
+  import xml from "highlight.js/lib/languages/xml";
+  import json from "highlight.js/lib/languages/json";
+  import yaml from "highlight.js/lib/languages/yaml";
+  import markdown from "highlight.js/lib/languages/markdown";
+  import bash from "highlight.js/lib/languages/bash";
+  import sql from "highlight.js/lib/languages/sql";
+  import plaintext from "highlight.js/lib/languages/plaintext";
+
+  // Register languages
+  hljs.registerLanguage("javascript", javascript);
+  hljs.registerLanguage("typescript", typescript);
+  hljs.registerLanguage("python", python);
+  hljs.registerLanguage("rust", rust);
+  hljs.registerLanguage("go", go);
+  hljs.registerLanguage("java", java);
+  hljs.registerLanguage("cpp", cpp);
+  hljs.registerLanguage("c", c);
+  hljs.registerLanguage("csharp", csharp);
+  hljs.registerLanguage("ruby", ruby);
+  hljs.registerLanguage("php", php);
+  hljs.registerLanguage("css", css);
+  hljs.registerLanguage("scss", scss);
+  hljs.registerLanguage("xml", xml);
+  hljs.registerLanguage("html", xml); // HTML uses XML highlighter
+  hljs.registerLanguage("json", json);
+  hljs.registerLanguage("yaml", yaml);
+  hljs.registerLanguage("markdown", markdown);
+  hljs.registerLanguage("bash", bash);
+  hljs.registerLanguage("sql", sql);
+  hljs.registerLanguage("plaintext", plaintext);
 
   interface Props {
     fileDiff: FileDiff;
@@ -147,11 +192,26 @@
     }
   };
 
-  // Highlight code content (placeholder - would need highlight.js dependency)
+  // Highlight code content using highlight.js
   const highlightCode = (content: string, language: string): string => {
-    // For now, return plain content without highlighting
-    // TODO: Add highlight.js dependency and implement syntax highlighting
-    return content;
+    if (!content) return "";
+    
+    try {
+      // Check if the language is registered
+      if (hljs.getLanguage(language)) {
+        const result = hljs.highlight(content, { language, ignoreIllegals: true });
+        return result.value;
+      }
+      // Fallback to auto-detection for unknown languages
+      const result = hljs.highlightAuto(content);
+      return result.value;
+    } catch (e) {
+      // If highlighting fails, return escaped content
+      return content
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
   };
 
   // Handle add comment placeholder
