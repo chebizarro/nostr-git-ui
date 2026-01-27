@@ -82,6 +82,10 @@ export class Repo {
   #repo: RepoAnnouncement | undefined = $state(undefined);
   #repoStateEvent: RepoStateEvent | undefined = $state(undefined);
   #state: RepoState | undefined = $state(undefined);
+  
+  // Clone URL error tracking - surfaces 404s and other errors to the UI
+  #cloneUrlErrors: Array<{ url: string; error: string; status?: number }> = $state([]);
+  
   // Reactive selected branch so UI can respond to changes
   #selectedBranchState: string | undefined = $state(undefined);
   #branchSwitching: boolean = $state(false);
@@ -299,6 +303,11 @@ export class Repo {
     this.vendorReadRouter = new VendorReadRouter({
       getTokens: () => tokens.waitForInitialization(),
       preferVendorReads: true,
+    });
+    
+    // Wire up error callback to surface clone URL errors (404s, auth errors, etc.) to the UI
+    this.vendorReadRouter.setCloneUrlErrorCallback((url, error, status) => {
+      this.recordCloneUrlError(url, error, status);
     });
 
     // Initialize CommitManager with dependencies and vendor router for API-first commit reads
@@ -992,6 +1001,33 @@ export class Repo {
   // Expose clone URLs from the parsed repo announcement
   get cloneUrls(): string[] {
     return this.#repo?.clone ?? [];
+  }
+
+  // Expose clone URL errors for UI display (e.g., 404s, auth errors)
+  get cloneUrlErrors(): Array<{ url: string; error: string; status?: number }> {
+    return this.#cloneUrlErrors;
+  }
+
+  // Record a clone URL error (called by VendorReadRouter or other components)
+  recordCloneUrlError(url: string, error: string, status?: number): void {
+    // Avoid duplicates
+    const existing = this.#cloneUrlErrors.find(e => e.url === url);
+    if (existing) {
+      existing.error = error;
+      existing.status = status;
+    } else {
+      this.#cloneUrlErrors = [...this.#cloneUrlErrors, { url, error, status }];
+    }
+  }
+
+  // Clear clone URL errors (e.g., after successful operation)
+  clearCloneUrlErrors(): void {
+    this.#cloneUrlErrors = [];
+  }
+
+  // Check if any clone URLs have errors
+  get hasCloneUrlErrors(): boolean {
+    return this.#cloneUrlErrors.length > 0;
   }
 
   // Expose relays from the parsed repo announcement

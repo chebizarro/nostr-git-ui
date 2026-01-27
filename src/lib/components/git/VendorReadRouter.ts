@@ -83,6 +83,11 @@ export interface VendorCommitResult {
 type SupportedVendor = "github" | "gitlab" | "gitea" | "bitbucket";
 
 /**
+ * Callback for reporting clone URL errors to the UI
+ */
+export type CloneUrlErrorCallback = (url: string, error: string, status?: number) => void;
+
+/**
  * VendorReadRouter performs vendor API reads first (when supported) and falls back to worker git RPC.
  * - Vendor reads are best-effort and should never block fallback git reads.
  * - Heavy git/FS operations always go through WorkerManager RPC.
@@ -90,10 +95,37 @@ type SupportedVendor = "github" | "gitlab" | "gitea" | "bitbucket";
 export class VendorReadRouter {
   private getTokens: () => Promise<Token[]>;
   private preferVendorReads: boolean;
+  private onCloneUrlError?: CloneUrlErrorCallback;
 
   constructor(config: VendorReadRouterConfig) {
     this.getTokens = config.getTokens;
     this.preferVendorReads = config.preferVendorReads ?? true;
+  }
+
+  /**
+   * Set a callback to be notified when clone URL errors occur (404, auth errors, etc.)
+   * This allows the UI to display these errors to the user.
+   */
+  setCloneUrlErrorCallback(callback: CloneUrlErrorCallback | undefined): void {
+    this.onCloneUrlError = callback;
+  }
+
+  /**
+   * Report a clone URL error to the registered callback
+   */
+  private reportCloneUrlError(url: string, error: string, status?: number): void {
+    if (this.onCloneUrlError) {
+      this.onCloneUrlError(url, error, status);
+    }
+  }
+
+  /**
+   * Extract HTTP status code from error message if present
+   */
+  private extractHttpStatus(error?: string): number | undefined {
+    if (!error) return undefined;
+    const match = error.match(/HTTP\s*(\d{3})/i);
+    return match ? parseInt(match[1], 10) : undefined;
   }
 
   async listDirectory(params: {
@@ -151,6 +183,9 @@ export class VendorReadRouter {
         for (const attempt of vendorResult.attempts) {
           if (!attempt.success) {
             console.warn(`  - ${attempt.url}: ${attempt.error}`);
+            // Report error to UI callback
+            const status = this.extractHttpStatus(attempt.error);
+            this.reportCloneUrlError(attempt.url, attempt.error || "Unknown error", status);
           }
         }
       }
@@ -239,6 +274,12 @@ export class VendorReadRouter {
         console.warn(
           `[VendorReadRouter] All ${vendorResult.attempts.length} vendor URL(s) failed for getFileContent`
         );
+        for (const attempt of vendorResult.attempts) {
+          if (!attempt.success) {
+            const status = this.extractHttpStatus(attempt.error);
+            this.reportCloneUrlError(attempt.url, attempt.error || "Unknown error", status);
+          }
+        }
       }
     }
 
@@ -306,6 +347,12 @@ export class VendorReadRouter {
         console.warn(
           `[VendorReadRouter] All ${vendorResult.attempts.length} vendor URL(s) failed for listRefs`
         );
+        for (const attempt of vendorResult.attempts) {
+          if (!attempt.success) {
+            const status = this.extractHttpStatus(attempt.error);
+            this.reportCloneUrlError(attempt.url, attempt.error || "Unknown error", status);
+          }
+        }
       }
     }
 
@@ -386,6 +433,12 @@ export class VendorReadRouter {
         console.warn(
           `[VendorReadRouter] All ${vendorResult.attempts.length} vendor URL(s) failed for listCommits`
         );
+        for (const attempt of vendorResult.attempts) {
+          if (!attempt.success) {
+            const status = this.extractHttpStatus(attempt.error);
+            this.reportCloneUrlError(attempt.url, attempt.error || "Unknown error", status);
+          }
+        }
       }
     }
 
