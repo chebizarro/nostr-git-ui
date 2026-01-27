@@ -382,37 +382,14 @@ export class CommitManager {
         return { success: false, error: "Repository ID is empty" };
       }
 
-      // Check current data level
-      const dataLevel = await this.workerManager.getRepoDataLevel(effectiveRepoId);
-
-      // For commit history, we need full clone to avoid NotFoundError
-      if (dataLevel !== "full") {
-        console.log(`Upgrading to full clone for commit history (current: ${dataLevel})`);
-        const upgradeResult = await this.workerManager.ensureFullClone({
-          repoId: effectiveRepoId as string,
-          branch: branchName as string,
-          depth: Math.max(requiredDepth, this.config.defaultDepth) as number,
-        });
-
-        if (!upgradeResult.success) {
-          const err = createNetworkError();
-          err.message =
-            `Failed to ensure full clone for commit history ` +
-            `(repoId=${String(effectiveRepoId)}, branch=${String(branchName)}, dataLevel=${String(dataLevel)}, depth=${String(
-              Math.max(requiredDepth, this.config.defaultDepth)
-            )}): ` +
-            `${String(upgradeResult.error || "unknown error")}`;
-          throw err;
-        }
-      }
-
-      // Try vendor API first if available (API-first, git fallback)
+      // Try vendor API FIRST if available (API-first for fast UI response)
+      // This avoids waiting for slow git clone/sync operations for supported vendors like GitHub
       let commitsResult: { success: boolean; commits?: any[]; fallbackUsed?: string; error?: string; fromVendor?: boolean };
 
       if (this.vendorReadRouter && this.repoEventSnapshot) {
         try {
           const cloneUrls = this.getCloneUrlsFromRepoEvent(this.repoEventSnapshot);
-          console.log(`[CommitManager] Trying VendorReadRouter.listCommits for branch=${branchName}, depth=${requiredDepth}`);
+          console.log(`[CommitManager] Trying VendorReadRouter.listCommits FIRST for branch=${branchName}, depth=${requiredDepth}`);
 
           const vendorResult = await this.vendorReadRouter.listCommits({
             workerManager: this.workerManager,
@@ -458,7 +435,32 @@ export class CommitManager {
       }
 
       // If vendor failed or wasn't available, fall back to git worker
+      // This requires ensuring the repo is cloned first
       if (!commitsResult.success || !commitsResult.commits) {
+        // Check current data level - only needed for git fallback
+        const dataLevel = await this.workerManager.getRepoDataLevel(effectiveRepoId);
+
+        // For commit history, we need full clone to avoid NotFoundError
+        if (dataLevel !== "full") {
+          console.log(`Upgrading to full clone for commit history (current: ${dataLevel})`);
+          const upgradeResult = await this.workerManager.ensureFullClone({
+            repoId: effectiveRepoId as string,
+            branch: branchName as string,
+            depth: Math.max(requiredDepth, this.config.defaultDepth) as number,
+          });
+
+          if (!upgradeResult.success) {
+            const err = createNetworkError();
+            err.message =
+              `Failed to ensure full clone for commit history ` +
+              `(repoId=${String(effectiveRepoId)}, branch=${String(branchName)}, dataLevel=${String(dataLevel)}, depth=${String(
+                Math.max(requiredDepth, this.config.defaultDepth)
+              )}): ` +
+              `${String(upgradeResult.error || "unknown error")}`;
+            throw err;
+          }
+        }
+
         console.log(`[CommitManager] Calling worker.getCommitHistory with repoId=${effectiveRepoId}, branch=${branchName}, depth=${requiredDepth}`);
         commitsResult = await this.workerManager.getCommitHistory({
           repoId: effectiveRepoId as string,
@@ -492,15 +494,47 @@ export class CommitManager {
           if (allCommits.length < requiredDepth) {
             // If we got fewer commits than requested, we have all of them
             this.totalCommits = allCommits.length;
-          } else {
-            // Get total count separately (this might be cached)
-            const countResult = await this.workerManager.getCommitCount({
-              repoId: effectiveRepoId as string,
+          } else if (this.vendorReadRouter && this.repoEventSnapshot) {
+            // Use unified getCommitCount that handles vendor API gracefully
+            const cloneUrls = this.getCloneUrlsFromRepoEvent(this.repoEventSnapshot);
+            const countResult = await this.vendorReadRouter.getCommitCount({
+              workerManager: this.workerManager,
+              repoEvent: this.repoEventSnapshot,
+              repoKey: this.canonicalKey,
+              cloneUrls,
               branch: branchName as string,
             });
 
             if (countResult.success) {
-              this.totalCommits = countResult.count;
+              if (countResult.isEstimate) {
+                // Vendor API doesn't provide exact count - use loaded commits as estimate
+                this.totalCommits = allCommits.length;
+                this.hasMoreCommits = true; // Assume there are more when we hit the limit
+                console.log(`[CommitManager] Using vendor commit count estimate: ${this.totalCommits}+`);
+              } else {
+                this.totalCommits = countResult.count;
+              }
+            } else {
+              // Graceful fallback - use loaded commits as estimate
+              this.totalCommits = allCommits.length;
+              this.hasMoreCommits = true;
+              console.log(`[CommitManager] getCommitCount failed, using estimate: ${this.totalCommits}+`);
+            }
+          } else {
+            // No vendor router - try git worker directly (may fail if not cloned)
+            try {
+              const countResult = await this.workerManager.getCommitCount({
+                repoId: effectiveRepoId as string,
+                branch: branchName as string,
+              });
+
+              if (countResult.success) {
+                this.totalCommits = countResult.count;
+              }
+            } catch {
+              // Graceful fallback - use loaded commits as estimate
+              this.totalCommits = allCommits.length;
+              this.hasMoreCommits = true;
             }
           }
         }

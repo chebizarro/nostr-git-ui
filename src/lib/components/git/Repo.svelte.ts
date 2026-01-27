@@ -495,12 +495,20 @@ export class Repo {
 
         await this.#loadCommitsFromRepo();
 
+        // Only sync with remote if vendor API is NOT available
+        // When vendor API is available (GitHub, GitLab, etc.), we can get data immediately
+        // without waiting for slow git sync operations
         try {
           const repoId = this.key;
           const cloneUrls = [...(this.#repo?.clone || [])];
           const branch = this.branchManager.getMainBranch();
-          if (repoId && cloneUrls.length > 0) {
+          const hasVendorApi = this.vendorReadRouter?.hasVendorSupport(cloneUrls) ?? false;
+          
+          if (repoId && cloneUrls.length > 0 && !hasVendorApi) {
+            console.log(`[Repo init] No vendor API, syncing with remote...`);
             this.syncStatus = await this.workerManager.syncWithRemote({ repoId, cloneUrls, branch });
+          } else if (hasVendorApi) {
+            console.log(`[Repo init] Vendor API available, skipping git sync for fast UI response`);
           }
         } catch {}
 
@@ -1172,20 +1180,27 @@ export class Repo {
     } catch {}
 
     try {
-      // Ensure worker is ready
-      if (!this.workerManager?.isReady) {
-        await this.workerManager.initialize();
-      }
-
       // Gather clone URLs for remote operations
       const cloneUrls = [...(this.#repo?.clone || [])];
+
+      // Check if vendor API is available - if so, skip slow git sync operations
+      // The vendor API (GitHub, GitLab, etc.) can provide commits/files immediately
+      // without needing to clone/sync the repo first
+      const hasVendorApi = this.vendorReadRouter?.hasVendorSupport(cloneUrls) ?? false;
 
       // Track if we need to clear cache (only if branch content actually changed)
       let shouldClearCache = false;
 
-      // 1) Ask worker to sync local repo with remote for the selected branch/tag
-      if (this.key && cloneUrls.length > 0) {
+      // 1) Only sync with remote if vendor API is NOT available
+      // When vendor API is available, we can get data immediately without waiting for git
+      if (!hasVendorApi && this.key && cloneUrls.length > 0) {
+        // Ensure worker is ready
+        if (!this.workerManager?.isReady) {
+          await this.workerManager.initialize();
+        }
+
         try {
+          console.log(`[setSelectedBranch] No vendor API, syncing with remote...`);
           this.syncStatus = await this.workerManager.syncWithRemote({
             repoId: this.key,
             cloneUrls,
@@ -1204,11 +1219,13 @@ export class Repo {
           // If sync fails, play it safe and clear cache
           shouldClearCache = true;
         }
-      }
 
-      // 2) Ensure the branch is fully available locally (deep clone as needed)
-      if (this.key) {
-        await this.workerManager.ensureFullClone({ repoId: this.key, branch: shortBranch });
+        // 2) Ensure the branch is fully available locally (deep clone as needed)
+        if (this.key) {
+          await this.workerManager.ensureFullClone({ repoId: this.key, branch: shortBranch });
+        }
+      } else if (hasVendorApi) {
+        console.log(`[setSelectedBranch] Vendor API available, skipping git sync for fast UI response`);
       }
 
       // 3) Clear caches only if branch content actually changed

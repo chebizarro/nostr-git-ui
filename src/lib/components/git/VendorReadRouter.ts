@@ -443,6 +443,78 @@ export class VendorReadRouter {
     }
   }
 
+  /**
+   * Check if any of the provided clone URLs have vendor API support.
+   * This can be used to skip slow git operations when vendor API is available.
+   */
+  hasVendorSupport(cloneUrls: string[]): boolean {
+    if (!this.preferVendorReads) return false;
+    const remotes = this.getValidRemotes(cloneUrls);
+    return remotes.some((url) => this.getSupportedVendor(url) !== null);
+  }
+
+  /**
+   * Get commit count for a branch. Tries vendor API first, falls back to git worker.
+   * Returns an estimate when using vendor API (exact count not available without cloning).
+   * Never throws - returns { success: false } on error.
+   */
+  async getCommitCount(params: {
+    workerManager: WorkerManager;
+    repoEvent: RepoAnnouncementEvent;
+    repoKey?: string;
+    cloneUrls: string[];
+    branch: string;
+  }): Promise<{ success: boolean; count?: number; isEstimate?: boolean; fromVendor?: boolean; error?: string }> {
+    const branch = params.branch || "main";
+    const remotes = this.getValidRemotes(params.cloneUrls);
+
+    // 1) Check if vendor API is available
+    if (this.preferVendorReads && remotes.length > 0) {
+      const vendorUrls = remotes.filter((url) => this.getSupportedVendor(url) !== null);
+
+      if (vendorUrls.length > 0) {
+        // For vendor APIs, we can't get exact count without pagination
+        // Return a flag indicating this is an estimate based on loaded commits
+        // The caller should use the commits they've already loaded as the count
+        console.log(`[VendorReadRouter] getCommitCount: vendor API available, returning estimate flag`);
+        return {
+          success: true,
+          isEstimate: true,
+          fromVendor: true,
+        };
+      }
+    }
+
+    // 2) Git worker fallback - only if repo is cloned
+    try {
+      const countResult = await params.workerManager.getCommitCount({
+        repoId: params.repoKey || "",
+        branch,
+      });
+
+      if (countResult.success) {
+        return {
+          success: true,
+          count: countResult.count,
+          isEstimate: false,
+          fromVendor: false,
+        };
+      }
+
+      return {
+        success: false,
+        error: countResult.error || "Failed to get commit count from git",
+      };
+    } catch (err) {
+      // Don't throw - return graceful failure
+      console.warn(`[VendorReadRouter] getCommitCount git fallback failed:`, err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   private async vendorListDirectory(params: {
     vendor: SupportedVendor;
     remoteUrl: string;
